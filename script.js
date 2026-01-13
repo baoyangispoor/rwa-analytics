@@ -152,8 +152,6 @@ function updatePriceDisplay(crypto, data, price24h) {
 async function fetchPrices() {
     if (isRefreshing) return;
     
-    if (isRefreshing) return;
-    
     isRefreshing = true;
     refreshBtn.classList.add('loading');
     refreshBtn.disabled = true;
@@ -165,7 +163,18 @@ async function fetchPrices() {
             include_24hr_change: 'true'
         });
 
-        const response = await fetch(`${API_URL}?${params}`);
+        // 添加超时和错误处理
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
+        const response = await fetch(`${API_URL}?${params}`, {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -195,11 +204,19 @@ async function fetchPrices() {
     } catch (error) {
         console.error('获取价格失败:', error);
         
-        // 显示错误信息
-        btcPriceHero.textContent = '获取失败';
-        ethPriceHero.textContent = '获取失败';
+        let errorMsg = '无法获取价格数据';
+        if (error.name === 'AbortError') {
+            errorMsg = '请求超时';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMsg = '网络连接失败';
+        }
         
-        alert('无法获取价格数据，请检查网络连接或稍后重试。');
+        // 显示错误信息
+        btcPriceHero.textContent = '--';
+        ethPriceHero.textContent = '--';
+        
+        // 不显示alert，改为在控制台记录
+        console.warn(errorMsg + '，请检查网络连接或稍后重试');
     } finally {
         isRefreshing = false;
         refreshBtn.classList.remove('loading');
@@ -462,9 +479,21 @@ async function fetchRWAProjects() {
             sparkline: false
         });
 
+        // 添加超时控制
+        const controller1 = new AbortController();
+        const controller2 = new AbortController();
+        const timeout1 = setTimeout(() => controller1.abort(), 15000);
+        const timeout2 = setTimeout(() => controller2.abort(), 15000);
+        
         const [priceResponse, marketResponse] = await Promise.all([
-            fetch(`${API_URL}?${priceParams}`),
-            fetch(`${COINGECKO_API}/coins/markets?${marketParams}`)
+            fetch(`${API_URL}?${priceParams}`, {
+                signal: controller1.signal,
+                headers: { 'Accept': 'application/json' }
+            }).finally(() => clearTimeout(timeout1)),
+            fetch(`${COINGECKO_API}/coins/markets?${marketParams}`, {
+                signal: controller2.signal,
+                headers: { 'Accept': 'application/json' }
+            }).finally(() => clearTimeout(timeout2))
         ]);
 
         if (!priceResponse.ok || !marketResponse.ok) {
@@ -514,12 +543,94 @@ async function fetchRWAProjects() {
 
     } catch (error) {
         console.error('获取RWA项目失败:', error);
+        
+        let errorMessage = '无法加载RWA项目信息';
+        if (error.name === 'AbortError') {
+            errorMessage = '请求超时，请检查网络连接';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = '网络连接失败，请检查网络设置';
+        } else if (error.message.includes('429')) {
+            errorMessage = 'API请求过于频繁，请稍后再试';
+        }
+        
         rwaTableBody.innerHTML = `
             <tr>
                 <td colspan="6" class="loading-row">
-                    <span>无法加载RWA项目信息，请检查网络连接或稍后重试</span>
+                    <span>${errorMessage}</span>
+                    <br>
+                    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        重新加载
+                    </button>
                 </td>
             </tr>
+        `;
+    }
+}
+
+// ========== 公司图表模块 ==========
+
+// 公司官网配置（请替换为你的公司官网URL）
+const COMPANY_WEBSITE_URL = ''; // 请填写公司官网URL
+const COMPANY_CHARTS_CONFIG = [
+    // 示例配置，请根据实际情况修改
+    // { title: '销售数据', url: 'https://your-company.com/chart1', type: 'iframe' },
+    // { title: '用户增长', url: 'https://your-company.com/chart2', type: 'iframe' }
+];
+
+// 加载公司图表
+async function loadCompanyCharts() {
+    const chartsContainer = document.getElementById('company-charts');
+    
+    if (!COMPANY_WEBSITE_URL && COMPANY_CHARTS_CONFIG.length === 0) {
+        chartsContainer.innerHTML = `
+            <div class="chart-placeholder">
+                <p>请配置公司官网URL和图表信息</p>
+                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: var(--text-tertiary);">
+                    在 script.js 中设置 COMPANY_WEBSITE_URL 和 COMPANY_CHARTS_CONFIG
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    try {
+        chartsContainer.innerHTML = '<div class="chart-loading">正在加载图表...</div>';
+        
+        // 如果有配置的图表，加载它们
+        if (COMPANY_CHARTS_CONFIG.length > 0) {
+            chartsContainer.innerHTML = '';
+            COMPANY_CHARTS_CONFIG.forEach((chart, index) => {
+                const chartCard = document.createElement('div');
+                chartCard.className = 'chart-card';
+                chartCard.innerHTML = `
+                    <div class="chart-title">${chart.title}</div>
+                    <div class="chart-content">
+                        ${chart.type === 'iframe' 
+                            ? `<iframe class="chart-iframe" src="${chart.url}" frameborder="0"></iframe>`
+                            : `<div class="chart-placeholder">图表类型: ${chart.type}</div>`
+                        }
+                    </div>
+                `;
+                chartsContainer.appendChild(chartCard);
+            });
+        } else if (COMPANY_WEBSITE_URL) {
+            // 如果没有具体配置，尝试从公司官网获取图表
+            chartsContainer.innerHTML = `
+                <div class="chart-card">
+                    <div class="chart-title">公司数据</div>
+                    <div class="chart-content">
+                        <iframe class="chart-iframe" src="${COMPANY_WEBSITE_URL}" frameborder="0"></iframe>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('加载公司图表失败:', error);
+        chartsContainer.innerHTML = `
+            <div class="chart-placeholder">
+                <p>无法加载图表数据</p>
+                <p style="font-size: 0.85rem; margin-top: 0.5rem;">${error.message}</p>
+            </div>
         `;
     }
 }
@@ -539,6 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchPrices();
     fetchRWAProjects();
+    loadCompanyCharts(); // 加载公司图表
     if (autoRefreshCheckbox.checked) {
         startAutoRefresh();
     }
