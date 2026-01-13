@@ -567,74 +567,8 @@ async function fetchRWAProjects() {
     }
 }
 
-// ========== 公司图表模块 ==========
-
-// 公司官网配置
-const COMPANY_WEBSITE_URL = 'http://117.24.217.163:10015'; // 公司官网URL
+// 公司Logo配置
 const COMPANY_LOGO_URL = 'http://117.24.217.163:10015/website/images/common/logo.png';
-const COMPANY_CHARTS_CONFIG = [
-    // 可以添加更多图表配置
-    // { title: '销售数据', url: 'http://117.24.217.163:10015/chart1', type: 'iframe' },
-    // { title: '用户增长', url: 'http://117.24.217.163:10015/chart2', type: 'iframe' }
-];
-
-// 加载公司图表
-async function loadCompanyCharts() {
-    const chartsContainer = document.getElementById('company-charts');
-    
-    if (!COMPANY_WEBSITE_URL && COMPANY_CHARTS_CONFIG.length === 0) {
-        chartsContainer.innerHTML = `
-            <div class="chart-placeholder">
-                <p>请配置公司官网URL和图表信息</p>
-                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: var(--text-tertiary);">
-                    在 script.js 中设置 COMPANY_WEBSITE_URL 和 COMPANY_CHARTS_CONFIG
-                </p>
-            </div>
-        `;
-        return;
-    }
-    
-    try {
-        chartsContainer.innerHTML = '<div class="chart-loading">正在加载图表...</div>';
-        
-        // 如果有配置的图表，加载它们
-        if (COMPANY_CHARTS_CONFIG.length > 0) {
-            chartsContainer.innerHTML = '';
-            COMPANY_CHARTS_CONFIG.forEach((chart, index) => {
-                const chartCard = document.createElement('div');
-                chartCard.className = 'chart-card';
-                chartCard.innerHTML = `
-                    <div class="chart-title">${chart.title}</div>
-                    <div class="chart-content">
-                        ${chart.type === 'iframe' 
-                            ? `<iframe class="chart-iframe" src="${chart.url}" frameborder="0"></iframe>`
-                            : `<div class="chart-placeholder">图表类型: ${chart.type}</div>`
-                        }
-                    </div>
-                `;
-                chartsContainer.appendChild(chartCard);
-            });
-        } else if (COMPANY_WEBSITE_URL) {
-            // 如果没有具体配置，尝试从公司官网获取图表
-            chartsContainer.innerHTML = `
-                <div class="chart-card">
-                    <div class="chart-title">公司数据</div>
-                    <div class="chart-content">
-                        <iframe class="chart-iframe" src="${COMPANY_WEBSITE_URL}" frameborder="0"></iframe>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('加载公司图表失败:', error);
-        chartsContainer.innerHTML = `
-            <div class="chart-placeholder">
-                <p>无法加载图表数据</p>
-                <p style="font-size: 0.85rem; margin-top: 0.5rem;">${error.message}</p>
-            </div>
-        `;
-    }
-}
 
 // 页面加载时获取RWA项目
 document.addEventListener('DOMContentLoaded', () => {
@@ -651,7 +585,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchPrices();
     fetchRWAProjects();
-    loadCompanyCharts(); // 加载公司图表
     if (autoRefreshCheckbox.checked) {
         startAutoRefresh();
     }
