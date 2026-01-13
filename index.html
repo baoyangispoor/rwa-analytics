@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RWA Analytics - 现实世界资产追踪</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">⚡</span>
+                <span class="brand-text">RWA Analytics</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active">总览</a>
+                <a href="#" class="nav-link">RWA项目</a>
+                <a href="#" class="nav-link">数据</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="app-container">
+        <!-- 顶部统计卡片 -->
+        <section class="hero-section">
+            <div class="hero-stats">
+                <div class="hero-stat-card">
+                    <div class="stat-label">BTC 价格</div>
+                    <div class="stat-value-large" id="btc-price-hero">--</div>
+                    <div class="stat-change" id="btc-change-hero">
+                        <span class="change-indicator">--</span>
+                        <span class="change-text">--</span>
+                    </div>
+                </div>
+                <div class="hero-stat-card">
+                    <div class="stat-label">ETH 价格</div>
+                    <div class="stat-value-large" id="eth-price-hero">--</div>
+                    <div class="stat-change" id="eth-change-hero">
+                        <span class="change-indicator">--</span>
+                        <span class="change-text">--</span>
+                    </div>
+                </div>
+                <div class="hero-stat-card">
+                    <div class="stat-label">RWA 总市值</div>
+                    <div class="stat-value-large" id="total-market-cap-hero">--</div>
+                    <div class="stat-change" id="total-change-hero">
+                        <span class="change-indicator">--</span>
+                        <span class="change-text">--</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RWA项目区域 -->
+        <section class="main-section">
+            <div class="section-header-bar">
+                <div class="section-title-group">
+                    <h1 class="section-title">RWA 项目总览</h1>
+                    <p class="section-description">基于 <a href="https://app.rwa.xyz/" target="_blank">RWA.xyz</a> 的现实世界资产代币化项目追踪</p>
+                </div>
+                <div class="section-actions">
+                    <button class="action-btn" id="refresh-btn">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2V6M8 14V10M2 8H6M14 8H10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M2.93 2.93L5.76 5.76M10.24 10.24L13.07 13.07M2.93 13.07L5.76 10.24M10.24 5.76L13.07 2.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        刷新
+                    </button>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-refresh" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">自动刷新</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 筛选器 -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <button class="filter-chip active" data-category="all">全部</button>
+                    <button class="filter-chip" data-category="treasuries">政府证券</button>
+                    <button class="filter-chip" data-category="stablecoins">稳定币</button>
+                    <button class="filter-chip" data-category="commodities">商品/贵金属</button>
+                    <button class="filter-chip" data-category="stocks">股票</button>
+                    <button class="filter-chip" data-category="bonds">债券</button>
+                    <button class="filter-chip" data-category="funds">机构基金</button>
+                    <button class="filter-chip" data-category="platforms">平台代币</button>
+                </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="stats-grid" id="rwa-stats">
+                <div class="stat-box">
+                    <div class="stat-box-label">项目总数</div>
+                    <div class="stat-box-value" id="total-projects">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-label">总市值</div>
+                    <div class="stat-box-value" id="total-market-cap">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-label">24h 变化</div>
+                    <div class="stat-box-value" id="total-change">--</div>
+                </div>
+            </div>
+
+            <!-- 项目表格 -->
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th class="col-name">项目</th>
+                            <th class="col-category">类别</th>
+                            <th class="col-price">价格</th>
+                            <th class="col-change">24h 变化</th>
+                            <th class="col-marketcap">市值</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rwa-table-body">
+                        <tr>
+                            <td colspan="6" class="loading-row">
+                                <div class="loading-spinner"></div>
+                                <span>正在加载数据...</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <footer class="app-footer">
+        <div class="footer-content">
+            <p>数据来源: <a href="https://www.coingecko.com" target="_blank">CoinGecko</a> | <a href="https://app.rwa.xyz/" target="_blank">RWA.xyz</a></p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
