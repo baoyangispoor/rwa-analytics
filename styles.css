@@ -91,6 +91,13 @@ body::before {
     color: var(--text-primary);
 }
 
+.company-logo {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+    max-width: 200px;
+}
+
 .brand-icon {
     font-size: 1.5rem;
     background: var(--gradient-accent);

@@ -569,12 +569,13 @@ async function fetchRWAProjects() {
 
 // ========== 公司图表模块 ==========
 
-// 公司官网配置（请替换为你的公司官网URL）
-const COMPANY_WEBSITE_URL = ''; // 请填写公司官网URL
+// 公司官网配置
+const COMPANY_WEBSITE_URL = 'http://117.24.217.163:10015'; // 公司官网URL
+const COMPANY_LOGO_URL = 'http://117.24.217.163:10015/website/images/common/logo.png';
 const COMPANY_CHARTS_CONFIG = [
-    // 示例配置，请根据实际情况修改
-    // { title: '销售数据', url: 'https://your-company.com/chart1', type: 'iframe' },
-    // { title: '用户增长', url: 'https://your-company.com/chart2', type: 'iframe' }
+    // 可以添加更多图表配置
+    // { title: '销售数据', url: 'http://117.24.217.163:10015/chart1', type: 'iframe' },
+    // { title: '用户增长', url: 'http://117.24.217.163:10015/chart2', type: 'iframe' }
 ];
 
 // 加载公司图表
