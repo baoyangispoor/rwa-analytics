@@ -707,34 +707,103 @@ let currentResearchCategory = 'all';
 
 // 加载研究数据
 async function loadResearchData() {
+    const tbody = document.getElementById('research-table-body');
+    
     try {
-        const response = await fetch('research_data.json');
-        if (!response.ok) {
-            throw new Error('无法加载研究数据');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="loading-row">
+                    <div class="loading-spinner"></div>
+                    <span>正在加载研究数据...</span>
+                </td>
+            </tr>
+        `;
+        
+        // 尝试多个可能的路径
+        const possiblePaths = [
+            './research_data.json',
+            'research_data.json',
+            '/research_data.json'
+        ];
+        
+        let response = null;
+        let lastError = null;
+        
+        for (const path of possiblePaths) {
+            try {
+                response = await fetch(path);
+                if (response.ok) {
+                    break;
+                }
+            } catch (e) {
+                lastError = e;
+                continue;
+            }
         }
+        
+        if (!response || !response.ok) {
+            throw new Error(`无法加载研究数据文件。状态: ${response ? response.status : '网络错误'}`);
+        }
+        
         const data = await response.json();
+        
+        if (!data || (!data.RWA && !data.DAT && !data.DAPE)) {
+            throw new Error('数据格式不正确或为空');
+        }
+        
         researchData = {
             RWA: data.RWA || [],
             DAT: data.DAT || [],
             DAPE: data.DAPE || []
         };
         
+        console.log('研究数据加载成功:', {
+            RWA: researchData.RWA.length,
+            DAT: researchData.DAT.length,
+            DAPE: researchData.DAPE.length
+        });
+        
         // 更新统计
-        document.getElementById('rwa-count').textContent = researchData.RWA.length;
-        document.getElementById('dat-count').textContent = researchData.DAT.length;
-        document.getElementById('dape-count').textContent = researchData.DAPE.length;
+        const rwaCountEl = document.getElementById('rwa-count');
+        const datCountEl = document.getElementById('dat-count');
+        const dapeCountEl = document.getElementById('dape-count');
+        
+        if (rwaCountEl) rwaCountEl.textContent = researchData.RWA.length;
+        if (datCountEl) datCountEl.textContent = researchData.DAT.length;
+        if (dapeCountEl) dapeCountEl.textContent = researchData.DAPE.length;
         
         // 显示数据
         filterResearchData(currentResearchCategory);
     } catch (error) {
         console.error('加载研究数据失败:', error);
-        document.getElementById('research-table-body').innerHTML = `
+        console.error('错误详情:', {
+            message: error.message,
+            stack: error.stack
+        });
+        
+        tbody.innerHTML = `
             <tr>
                 <td colspan="8" class="loading-row">
-                    <span>无法加载研究数据，请检查 research_data.json 文件</span>
+                    <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
+                    <br>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
+                        错误: ${error.message}
+                    </span>
+                    <br>
+                    <button onclick="loadResearchData()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        重试加载
+                    </button>
                 </td>
             </tr>
         `;
+        
+        // 更新统计为0
+        const rwaCountEl = document.getElementById('rwa-count');
+        const datCountEl = document.getElementById('dat-count');
+        const dapeCountEl = document.getElementById('dape-count');
+        if (rwaCountEl) rwaCountEl.textContent = '0';
+        if (datCountEl) datCountEl.textContent = '0';
+        if (dapeCountEl) dapeCountEl.textContent = '0';
     }
 }
 
