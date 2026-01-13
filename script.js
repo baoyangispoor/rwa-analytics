@@ -820,29 +820,43 @@ function formatAssetSize(value) {
 
 // 创建研究数据表格行
 function createResearchRow(item, index) {
+    if (!item) {
+        console.error('项目数据为空');
+        return null;
+    }
+    
     const row = document.createElement('tr');
-    const projectName = item['项目名称'] || 'N/A';
-    const platform = item['发行方 / 平台'] || 'N/A';
-    const status = item['当前状态'] || 'N/A';
-    const assetType = item['资产类型'] || 'N/A';
+    const projectName = (item['项目名称'] || 'N/A').toString();
+    const platform = (item['发行方 / 平台'] || 'N/A').toString();
+    const status = (item['当前状态'] || 'N/A').toString();
+    const assetType = (item['资产类型'] || 'N/A').toString();
     const assetSize = formatAssetSize(item['资产规模（USD）']);
-    const score = item['币链评分（0-100）'] || 'N/A';
+    const score = (item['币链评分（0-100）'] || 'N/A').toString();
+    
+    // 转义HTML防止XSS
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+    
+    const firstChar = projectName && projectName.length > 0 ? projectName.charAt(0) : '?';
     
     row.innerHTML = `
         <td class="col-rank">${index + 1}</td>
         <td class="col-name">
             <div class="project-name">
-                <div class="project-logo">${projectName.charAt(0)}</div>
+                <div class="project-logo">${escapeHtml(firstChar)}</div>
                 <div class="project-info">
-                    <div class="project-title">${projectName}</div>
+                    <div class="project-title">${escapeHtml(projectName)}</div>
                 </div>
             </div>
         </td>
-        <td class="col-platform">${platform}</td>
-        <td class="col-status">${status}</td>
-        <td class="col-asset-type">${assetType}</td>
-        <td class="col-asset-size">${assetSize}</td>
-        <td class="col-score">${score}</td>
+        <td class="col-platform">${escapeHtml(platform)}</td>
+        <td class="col-status">${escapeHtml(status)}</td>
+        <td class="col-asset-type">${escapeHtml(assetType)}</td>
+        <td class="col-asset-size">${escapeHtml(assetSize)}</td>
+        <td class="col-score">${escapeHtml(score)}</td>
         <td class="col-actions">
             <button class="view-details-btn" data-index="${index}">详情</button>
         </td>
@@ -850,9 +864,11 @@ function createResearchRow(item, index) {
     
     // 添加详情按钮事件
     const detailBtn = row.querySelector('.view-details-btn');
-    detailBtn.addEventListener('click', () => {
-        showProjectDetails(item);
-    });
+    if (detailBtn) {
+        detailBtn.addEventListener('click', () => {
+            showProjectDetails(item);
+        });
+    }
     
     return row;
 }
@@ -870,14 +886,30 @@ function filterResearchData(category) {
         }
     });
     
+    // 检查数据是否已加载
+    if (!researchData || (!researchData.RWA && !researchData.DAT && !researchData.DAPE)) {
+        console.warn('研究数据尚未加载，尝试重新加载...');
+        loadResearchData();
+        return;
+    }
+    
     let filteredData = [];
     if (category === 'all') {
-        filteredData = [...researchData.RWA, ...researchData.DAT, ...researchData.DAPE];
+        filteredData = [
+            ...(researchData.RWA || []),
+            ...(researchData.DAT || []),
+            ...(researchData.DAPE || [])
+        ];
     } else {
         filteredData = researchData[category] || [];
     }
     
     const tbody = document.getElementById('research-table-body');
+    if (!tbody) {
+        console.error('找不到 research-table-body 元素');
+        return;
+    }
+    
     tbody.innerHTML = '';
     
     if (filteredData.length === 0) {
@@ -892,18 +924,53 @@ function filterResearchData(category) {
     }
     
     filteredData.forEach((item, index) => {
-        const row = createResearchRow(item, index);
-        tbody.appendChild(row);
+        try {
+            const row = createResearchRow(item, index);
+            if (row) {
+                tbody.appendChild(row);
+            }
+        } catch (error) {
+            console.error('创建表格行失败:', error, item);
+        }
     });
 }
 
 // 显示项目详情
 function showProjectDetails(item) {
+    if (!item) {
+        console.error('项目数据为空');
+        return;
+    }
+    
     const modal = document.getElementById('project-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
     
-    modalTitle.textContent = item['项目名称'] || '项目详情';
+    if (!modal || !modalTitle || !modalBody) {
+        console.error('找不到模态框元素');
+        return;
+    }
+    
+    const projectName = (item['项目名称'] || '项目详情').toString();
+    modalTitle.textContent = projectName;
+    
+    // 转义HTML
+    const escapeHtml = (text) => {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text.toString();
+        return div.innerHTML;
+    };
+    
+    // 创建链接
+    const createLink = (url, text) => {
+        if (!url || url === 'N/A' || url === '') return escapeHtml(text || 'N/A');
+        const urlStr = url.toString();
+        if (urlStr.startsWith('http')) {
+            return `<a href="${escapeHtml(urlStr)}" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;">${escapeHtml(text || urlStr)}</a>`;
+        }
+        return escapeHtml(text || urlStr);
+    };
     
     // 重要字段列表
     const importantFields = [
@@ -917,11 +984,18 @@ function showProjectDetails(item) {
     
     let html = '<div class="detail-grid">';
     importantFields.forEach(field => {
-        const value = item[field] || '';
+        let value = item[field] || '';
         if (value && value !== 'N/A' && value !== '') {
+            // 特殊处理链接字段
+            if (field === '可视化仪表盘' || field === '链上地址' || field === '法律文件') {
+                value = createLink(value, value);
+            } else {
+                value = escapeHtml(value.toString());
+            }
+            
             html += `
                 <div class="detail-item">
-                    <div class="detail-label">${field}</div>
+                    <div class="detail-label">${escapeHtml(field)}</div>
                     <div class="detail-value">${value}</div>
                 </div>
             `;
