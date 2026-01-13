@@ -696,12 +696,181 @@ async function fetchRWAProjects() {
 // 公司Logo配置
 const COMPANY_LOGO_URL = 'http://117.24.217.163:10015/website/images/common/logo.png';
 
-// 页面加载时获取RWA项目
-document.addEventListener('DOMContentLoaded', () => {
-    // 初始化筛选按钮
-    filterButtons = document.querySelectorAll('.filter-chip');
+// ========== 币链资本行研数据库模块 ==========
+
+let researchData = {
+    RWA: [],
+    DAT: [],
+    DAPE: []
+};
+let currentResearchCategory = 'all';
+
+// 加载研究数据
+async function loadResearchData() {
+    try {
+        const response = await fetch('research_data.json');
+        if (!response.ok) {
+            throw new Error('无法加载研究数据');
+        }
+        const data = await response.json();
+        researchData = {
+            RWA: data.RWA || [],
+            DAT: data.DAT || [],
+            DAPE: data.DAPE || []
+        };
+        
+        // 更新统计
+        document.getElementById('rwa-count').textContent = researchData.RWA.length;
+        document.getElementById('dat-count').textContent = researchData.DAT.length;
+        document.getElementById('dape-count').textContent = researchData.DAPE.length;
+        
+        // 显示数据
+        filterResearchData(currentResearchCategory);
+    } catch (error) {
+        console.error('加载研究数据失败:', error);
+        document.getElementById('research-table-body').innerHTML = `
+            <tr>
+                <td colspan="8" class="loading-row">
+                    <span>无法加载研究数据，请检查 research_data.json 文件</span>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// 格式化资产规模
+function formatAssetSize(value) {
+    if (!value || value === '' || value === 'N/A') return 'N/A';
+    const num = parseFloat(value.toString().replace(/,/g, ''));
+    if (isNaN(num)) return value;
+    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
+    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
+    if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`;
+    return `$${num.toFixed(2)}`;
+}
+
+// 创建研究数据表格行
+function createResearchRow(item, index) {
+    const row = document.createElement('tr');
+    const projectName = item['项目名称'] || 'N/A';
+    const platform = item['发行方 / 平台'] || 'N/A';
+    const status = item['当前状态'] || 'N/A';
+    const assetType = item['资产类型'] || 'N/A';
+    const assetSize = formatAssetSize(item['资产规模（USD）']);
+    const score = item['币链评分（0-100）'] || 'N/A';
     
-    // 筛选按钮事件监听
+    row.innerHTML = `
+        <td class="col-rank">${index + 1}</td>
+        <td class="col-name">
+            <div class="project-name">
+                <div class="project-logo">${projectName.charAt(0)}</div>
+                <div class="project-info">
+                    <div class="project-title">${projectName}</div>
+                </div>
+            </div>
+        </td>
+        <td class="col-platform">${platform}</td>
+        <td class="col-status">${status}</td>
+        <td class="col-asset-type">${assetType}</td>
+        <td class="col-asset-size">${assetSize}</td>
+        <td class="col-score">${score}</td>
+        <td class="col-actions">
+            <button class="view-details-btn" data-index="${index}">详情</button>
+        </td>
+    `;
+    
+    // 添加详情按钮事件
+    const detailBtn = row.querySelector('.view-details-btn');
+    detailBtn.addEventListener('click', () => {
+        showProjectDetails(item);
+    });
+    
+    return row;
+}
+
+// 筛选研究数据
+function filterResearchData(category) {
+    currentResearchCategory = category;
+    
+    // 更新筛选按钮状态
+    document.querySelectorAll('.research-filter').forEach(btn => {
+        if (btn.dataset.category === category) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    let filteredData = [];
+    if (category === 'all') {
+        filteredData = [...researchData.RWA, ...researchData.DAT, ...researchData.DAPE];
+    } else {
+        filteredData = researchData[category] || [];
+    }
+    
+    const tbody = document.getElementById('research-table-body');
+    tbody.innerHTML = '';
+    
+    if (filteredData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="loading-row">
+                    <span>该分类下暂无数据</span>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    filteredData.forEach((item, index) => {
+        const row = createResearchRow(item, index);
+        tbody.appendChild(row);
+    });
+}
+
+// 显示项目详情
+function showProjectDetails(item) {
+    const modal = document.getElementById('project-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    
+    modalTitle.textContent = item['项目名称'] || '项目详情';
+    
+    // 重要字段列表
+    const importantFields = [
+        '项目名称', '发行方 / 平台', '发行时间', '发行地区 / 监管框架',
+        '当前状态', '资产类型', '资产说明', '资产规模（USD）',
+        '现金流特征', '托管 / 审计方', 'Token 名称 / 符号', 'Token 类型',
+        '经济属性', '投资/消费属性', '收益分配方式', '年化收益率（APY）',
+        '币链评分（0-100）', '投资逻辑摘要', '风险点', '复盘结论',
+        '链上地址', '可视化仪表盘', '法律文件', '标签'
+    ];
+    
+    let html = '<div class="detail-grid">';
+    importantFields.forEach(field => {
+        const value = item[field] || '';
+        if (value && value !== 'N/A' && value !== '') {
+            html += `
+                <div class="detail-item">
+                    <div class="detail-label">${field}</div>
+                    <div class="detail-value">${value}</div>
+                </div>
+            `;
+        }
+    });
+    html += '</div>';
+    
+    modalBody.innerHTML = html;
+    modal.classList.add('show');
+}
+
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', () => {
+    // 初始化RWA项目筛选按钮
+    filterButtons = document.querySelectorAll('.filter-chip:not(.research-filter)');
+    
+    // RWA筛选按钮事件监听
     filterButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const category = btn.dataset.category;
@@ -709,8 +878,38 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
+    // 研究数据筛选按钮
+    document.querySelectorAll('.research-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            filterResearchData(category);
+        });
+    });
+    
+    // 模态框关闭事件
+    const modal = document.getElementById('project-modal');
+    const closeBtn = document.getElementById('modal-close');
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.classList.remove('show');
+        });
+    }
+    
+    // 点击背景关闭模态框
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+    }
+    
+    // 加载数据
     fetchPrices();
     fetchRWAProjects();
+    loadResearchData();
+    
     if (autoRefreshCheckbox.checked) {
         startAutoRefresh();
     }

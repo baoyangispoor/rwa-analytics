@@ -134,6 +134,81 @@
                 </table>
             </div>
         </section>
+
+        <!-- 币链资本行研数据库模块 -->
+        <section class="main-section research-section">
+            <div class="section-header-bar">
+                <div class="section-title-group">
+                    <h1 class="section-title">币链资本行研数据库</h1>
+                    <p class="section-description">专业的RWA项目研究数据与分析</p>
+                </div>
+            </div>
+
+            <!-- 分类筛选器 -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <button class="filter-chip research-filter active" data-category="all">全部</button>
+                    <button class="filter-chip research-filter" data-category="RWA">RWA</button>
+                    <button class="filter-chip research-filter" data-category="DAT">DAT</button>
+                    <button class="filter-chip research-filter" data-category="DAPE">DAPE</button>
+                </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="stats-grid" id="research-stats">
+                <div class="stat-box">
+                    <div class="stat-box-label">RWA项目</div>
+                    <div class="stat-box-value" id="rwa-count">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-label">DAT项目</div>
+                    <div class="stat-box-value" id="dat-count">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-label">DAPE项目</div>
+                    <div class="stat-box-value" id="dape-count">--</div>
+                </div>
+            </div>
+
+            <!-- 数据表格 -->
+            <div class="table-container">
+                <table class="data-table research-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th class="col-name">项目名称</th>
+                            <th class="col-platform">发行方/平台</th>
+                            <th class="col-status">当前状态</th>
+                            <th class="col-asset-type">资产类型</th>
+                            <th class="col-asset-size">资产规模</th>
+                            <th class="col-score">币链评分</th>
+                            <th class="col-actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="research-table-body">
+                        <tr>
+                            <td colspan="8" class="loading-row">
+                                <div class="loading-spinner"></div>
+                                <span>正在加载研究数据...</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- 项目详情模态框 -->
+    <div class="modal" id="project-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">项目详情</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- 详情内容将动态填充 -->
+            </div>
+        </div>
     </div>
 
     <footer class="app-footer">
