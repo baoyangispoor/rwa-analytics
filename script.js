@@ -66,6 +66,21 @@ const RWA_PROJECTS = [
 let autoRefreshInterval = null;
 let isRefreshing = false;
 
+// 缓存配置
+const CACHE_DURATION = 60000; // 缓存60秒
+const priceCache = {
+    data: null,
+    timestamp: 0
+};
+const rwaCache = {
+    data: null,
+    timestamp: 0
+};
+
+// 重试配置
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2秒后重试
+
 // DOM元素
 const btcPriceHero = document.getElementById('btc-price-hero');
 const ethPriceHero = document.getElementById('eth-price-hero');
@@ -163,24 +178,60 @@ async function fetchPrices() {
             include_24hr_change: 'true'
         });
 
-        // 添加超时和错误处理
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-        
-        const response = await fetch(`${API_URL}?${params}`, {
-            signal: controller.signal,
+        // 检查缓存
+        const now = Date.now();
+        if (priceCache.data && (now - priceCache.timestamp) < CACHE_DURATION) {
+            console.log('使用缓存的价格数据');
+            const cachedData = priceCache.data;
+            const btc24hChange = cachedData.bitcoin[`${VS_CURRENCY}_24h_change`] || 0;
+            const eth24hChange = cachedData.ethereum[`${VS_CURRENCY}_24h_change`] || 0;
+            const btcCurrentPrice = cachedData.bitcoin[VS_CURRENCY];
+            const ethCurrentPrice = cachedData.ethereum[VS_CURRENCY];
+            const btc24hPrice = btc24hChange !== 0 ? btcCurrentPrice / (1 + btc24hChange / 100) : btcCurrentPrice;
+            const eth24hPrice = eth24hChange !== 0 ? ethCurrentPrice / (1 + eth24hChange / 100) : ethCurrentPrice;
+            updatePriceDisplay('bitcoin', cachedData, btc24hPrice);
+            updatePriceDisplay('ethereum', cachedData, eth24hPrice);
+            return;
+        }
+
+        // 带重试的请求函数
+        const fetchWithRetry = async (url, options, retries = MAX_RETRIES) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20秒超时
+                    
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    console.log(`请求失败，${RETRY_DELAY/1000}秒后重试 (${i + 1}/${retries})...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                }
+            }
+        };
+
+        const response = await fetchWithRetry(`${API_URL}?${params}`, {
             headers: {
                 'Accept': 'application/json'
             }
         });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
 
         const data = await response.json();
+        
+        // 更新缓存
+        priceCache.data = data;
+        priceCache.timestamp = Date.now();
 
         // 获取24小时前的价格（通过24小时变化百分比计算）
         const btc24hChange = data.bitcoin[`${VS_CURRENCY}_24h_change`] || 0;
@@ -203,6 +254,27 @@ async function fetchPrices() {
 
     } catch (error) {
         console.error('获取价格失败:', error);
+        
+        // 如果缓存有数据，使用缓存
+        if (priceCache.data) {
+            console.log('使用缓存数据作为备用');
+            const cachedData = priceCache.data;
+            const btc24hChange = cachedData.bitcoin[`${VS_CURRENCY}_24h_change`] || 0;
+            const eth24hChange = cachedData.ethereum[`${VS_CURRENCY}_24h_change`] || 0;
+            const btcCurrentPrice = cachedData.bitcoin[VS_CURRENCY];
+            const ethCurrentPrice = cachedData.ethereum[VS_CURRENCY];
+            const btc24hPrice = btc24hChange !== 0 ? btcCurrentPrice / (1 + btc24hChange / 100) : btcCurrentPrice;
+            const eth24hPrice = eth24hChange !== 0 ? ethCurrentPrice / (1 + eth24hChange / 100) : ethCurrentPrice;
+            updatePriceDisplay('bitcoin', cachedData, btc24hPrice);
+            updatePriceDisplay('ethereum', cachedData, eth24hPrice);
+            
+            // 显示提示
+            const btcChange = btcChangeHero.querySelector('.change-text');
+            const ethChange = ethChangeHero.querySelector('.change-text');
+            if (btcChange) btcChange.textContent = '(缓存数据)';
+            if (ethChange) ethChange.textContent = '(缓存数据)';
+            return;
+        }
         
         let errorMsg = '无法获取价格数据';
         if (error.name === 'AbortError') {
@@ -479,21 +551,50 @@ async function fetchRWAProjects() {
             sparkline: false
         });
 
-        // 添加超时控制
-        const controller1 = new AbortController();
-        const controller2 = new AbortController();
-        const timeout1 = setTimeout(() => controller1.abort(), 15000);
-        const timeout2 = setTimeout(() => controller2.abort(), 15000);
+        // 检查缓存
+        const now = Date.now();
+        if (rwaCache.data && (now - rwaCache.timestamp) < CACHE_DURATION) {
+            console.log('使用缓存的RWA数据');
+            const cachedData = rwaCache.data;
+            rwaProjectsData = cachedData.projects;
+            filterRWAProjects(currentCategory);
+            return;
+        }
+
+        // 带重试的请求函数
+        const fetchWithRetry = async (url, options, retries = MAX_RETRIES) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25秒超时
+                    
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    console.log(`请求失败，${RETRY_DELAY/1000}秒后重试 (${i + 1}/${retries})...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                }
+            }
+        };
         
         const [priceResponse, marketResponse] = await Promise.all([
-            fetch(`${API_URL}?${priceParams}`, {
-                signal: controller1.signal,
+            fetchWithRetry(`${API_URL}?${priceParams}`, {
                 headers: { 'Accept': 'application/json' }
-            }).finally(() => clearTimeout(timeout1)),
-            fetch(`${COINGECKO_API}/coins/markets?${marketParams}`, {
-                signal: controller2.signal,
+            }),
+            fetchWithRetry(`${COINGECKO_API}/coins/markets?${marketParams}`, {
                 headers: { 'Accept': 'application/json' }
-            }).finally(() => clearTimeout(timeout2))
+            })
         ]);
 
         if (!priceResponse.ok || !marketResponse.ok) {
@@ -525,6 +626,14 @@ async function fetchRWAProjects() {
                 });
             }
         });
+        
+        // 更新缓存
+        rwaCache.data = {
+            projects: rwaProjectsData,
+            priceData: priceData,
+            marketData: marketData
+        };
+        rwaCache.timestamp = Date.now();
 
         // 如果没有数据，显示提示
         if (rwaProjectsData.length === 0) {
@@ -544,9 +653,26 @@ async function fetchRWAProjects() {
     } catch (error) {
         console.error('获取RWA项目失败:', error);
         
+        // 如果缓存有数据，使用缓存
+        if (rwaCache.data && rwaCache.data.projects) {
+            console.log('使用缓存数据作为备用');
+            rwaProjectsData = rwaCache.data.projects;
+            filterRWAProjects(currentCategory);
+            
+            // 显示提示
+            const firstRow = rwaTableBody.querySelector('tr');
+            if (firstRow) {
+                const notice = document.createElement('div');
+                notice.style.cssText = 'text-align: center; padding: 10px; color: var(--text-secondary); font-size: 0.85rem;';
+                notice.textContent = '⚠️ 当前显示的是缓存数据，可能不是最新';
+                rwaTableBody.insertBefore(notice, firstRow);
+            }
+            return;
+        }
+        
         let errorMessage = '无法加载RWA项目信息';
         if (error.name === 'AbortError') {
-            errorMessage = '请求超时，请检查网络连接';
+            errorMessage = '请求超时，已自动重试但失败';
         } else if (error.message.includes('Failed to fetch')) {
             errorMessage = '网络连接失败，请检查网络设置';
         } else if (error.message.includes('429')) {
