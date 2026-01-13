@@ -706,19 +706,94 @@ let researchData = {
 let currentResearchCategory = 'all';
 
 // 加载研究数据
-async function loadResearchData() {
+function loadResearchData() {
     const tbody = document.getElementById('research-table-body');
     
     try {
+        // 检查是否已加载内嵌数据
+        if (typeof RESEARCH_DATA !== 'undefined' && RESEARCH_DATA) {
+            const data = RESEARCH_DATA;
+            
+            if (!data || (!data.RWA && !data.DAT && !data.DAPE)) {
+                throw new Error('内嵌数据格式不正确或为空');
+            }
+            
+            researchData = {
+                RWA: data.RWA || [],
+                DAT: data.DAT || [],
+                DAPE: data.DAPE || []
+            };
+            
+            console.log('研究数据加载成功（内嵌数据）:', {
+                RWA: researchData.RWA.length,
+                DAT: researchData.DAT.length,
+                DAPE: researchData.DAPE.length
+            });
+        } else {
+            // 如果没有内嵌数据，尝试从JSON文件加载
+            console.log('尝试从JSON文件加载数据...');
+            loadResearchDataFromFile();
+            return;
+        }
+        
+        // 更新统计
+        const rwaCountEl = document.getElementById('rwa-count');
+        const datCountEl = document.getElementById('dat-count');
+        const dapeCountEl = document.getElementById('dape-count');
+        
+        if (rwaCountEl) rwaCountEl.textContent = researchData.RWA.length;
+        if (datCountEl) datCountEl.textContent = researchData.DAT.length;
+        if (dapeCountEl) dapeCountEl.textContent = researchData.DAPE.length;
+        
+        // 显示数据
+        filterResearchData(currentResearchCategory);
+    } catch (error) {
+        console.error('加载研究数据失败:', error);
+        
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="loading-row">
+                        <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
+                        <br>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
+                            错误: ${error.message}
+                        </span>
+                        <br>
+                        <button onclick="loadResearchData()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            重试加载
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // 更新统计为0
+        const rwaCountEl = document.getElementById('rwa-count');
+        const datCountEl = document.getElementById('dat-count');
+        const dapeCountEl = document.getElementById('dape-count');
+        if (rwaCountEl) rwaCountEl.textContent = '0';
+        if (datCountEl) datCountEl.textContent = '0';
+        if (dapeCountEl) dapeCountEl.textContent = '0';
+    }
+}
+
+// 从JSON文件加载（备用方案）
+async function loadResearchDataFromFile() {
+    const tbody = document.getElementById('research-table-body');
+    
+    if (tbody) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" class="loading-row">
                     <div class="loading-spinner"></div>
-                    <span>正在加载研究数据...</span>
+                    <span>正在从文件加载研究数据...</span>
                 </td>
             </tr>
         `;
-        
+    }
+    
+    try {
         // 尝试多个可能的路径
         const possiblePaths = [
             './research_data.json',
@@ -727,7 +802,6 @@ async function loadResearchData() {
         ];
         
         let response = null;
-        let lastError = null;
         
         for (const path of possiblePaths) {
             try {
@@ -736,7 +810,6 @@ async function loadResearchData() {
                     break;
                 }
             } catch (e) {
-                lastError = e;
                 continue;
             }
         }
@@ -757,7 +830,7 @@ async function loadResearchData() {
             DAPE: data.DAPE || []
         };
         
-        console.log('研究数据加载成功:', {
+        console.log('研究数据加载成功（从文件）:', {
             RWA: researchData.RWA.length,
             DAT: researchData.DAT.length,
             DAPE: researchData.DAPE.length
@@ -775,35 +848,20 @@ async function loadResearchData() {
         // 显示数据
         filterResearchData(currentResearchCategory);
     } catch (error) {
-        console.error('加载研究数据失败:', error);
-        console.error('错误详情:', {
-            message: error.message,
-            stack: error.stack
-        });
-        
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" class="loading-row">
-                    <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
-                    <br>
-                    <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
-                        错误: ${error.message}
-                    </span>
-                    <br>
-                    <button onclick="loadResearchData()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
-                        重试加载
-                    </button>
-                </td>
-            </tr>
-        `;
-        
-        // 更新统计为0
-        const rwaCountEl = document.getElementById('rwa-count');
-        const datCountEl = document.getElementById('dat-count');
-        const dapeCountEl = document.getElementById('dape-count');
-        if (rwaCountEl) rwaCountEl.textContent = '0';
-        if (datCountEl) datCountEl.textContent = '0';
-        if (dapeCountEl) dapeCountEl.textContent = '0';
+        console.error('从文件加载研究数据失败:', error);
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="loading-row">
+                        <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
+                        <br>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
+                            错误: ${error.message}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }
     }
 }
 
