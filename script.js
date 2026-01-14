@@ -95,15 +95,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize App
 function initializeApp() {
+    console.log('Initializing DEX app...');
+    
+    // Wait for ethers.js to load
+    if (typeof ethers === 'undefined') {
+        console.error('ethers.js not loaded');
+        // Try alternative CDN or use demo mode
+        setTimeout(() => {
+            if (typeof ethers === 'undefined') {
+                enableDemoMode();
+            } else {
+                initializeApp();
+            }
+        }, 1000);
+        return;
+    }
+    
     // Check if MetaMask is installed
     if (typeof window.ethereum !== 'undefined') {
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        setupEventListeners();
-        checkConnection();
+        try {
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            setupEventListeners();
+            checkConnection();
+        } catch (error) {
+            console.error('Error initializing provider:', error);
+            enableDemoMode();
+        }
     } else {
-        showNotification('请安装MetaMask钱包', 'error');
-        elements.connectWalletBtn.textContent = '请安装MetaMask';
-        elements.connectWalletBtn.disabled = true;
+        console.log('MetaMask not detected, enabling demo mode');
+        enableDemoMode();
     }
     
     // Initialize pool with some default liquidity for demo
@@ -111,10 +131,44 @@ function initializeApp() {
     updateUI();
 }
 
+// Enable Demo Mode (works without MetaMask)
+function enableDemoMode() {
+    console.log('Enabling demo mode...');
+    
+    // Create a demo provider for testing
+    try {
+        if (typeof ethers !== 'undefined') {
+            provider = new ethers.providers.JsonRpcProvider('https://eth.llamarpc.com');
+        }
+    } catch (error) {
+        console.error('Error creating demo provider:', error);
+    }
+    
+    // Update UI for demo mode
+    elements.connectWalletBtn.textContent = '连接钱包 (演示模式)';
+    elements.connectWalletBtn.disabled = false;
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Initialize demo user state
+    userState.balanceETH = 10; // Demo balance
+    userState.balanceUSDT = 10000; // Demo balance
+    
+    showNotification('演示模式：无需MetaMask即可体验', 'warning');
+}
+
 // Setup Event Listeners
 function setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
     // Wallet connection
-    elements.connectWalletBtn.addEventListener('click', connectWallet);
+    if (elements.connectWalletBtn) {
+        elements.connectWalletBtn.addEventListener('click', connectWallet);
+        console.log('Connect wallet button listener added');
+    } else {
+        console.error('Connect wallet button not found');
+    }
     
     // Tab switching
     elements.tabBtns.forEach(btn => {
@@ -128,11 +182,21 @@ function setupEventListeners() {
     elements.swapBtn.addEventListener('click', executeSwap);
     
     // Liquidity
-    elements.liquidityEthAmount.addEventListener('input', handleLiquidityInput);
-    elements.liquidityUsdtAmount.addEventListener('input', handleLiquidityInput);
-    elements.addLiquidityBtn.addEventListener('click', addLiquidity);
-    elements.removeLpAmount.addEventListener('input', handleRemoveLiquidityInput);
-    elements.removeLiquidityBtn.addEventListener('click', removeLiquidity);
+    if (elements.liquidityEthAmount) {
+        elements.liquidityEthAmount.addEventListener('input', handleLiquidityInput);
+    }
+    if (elements.liquidityUsdtAmount) {
+        elements.liquidityUsdtAmount.addEventListener('input', handleLiquidityInput);
+    }
+    if (elements.addLiquidityBtn) {
+        elements.addLiquidityBtn.addEventListener('click', addLiquidity);
+    }
+    if (elements.removeLpAmount) {
+        elements.removeLpAmount.addEventListener('input', handleRemoveLiquidityInput);
+    }
+    if (elements.removeLiquidityBtn) {
+        elements.removeLiquidityBtn.addEventListener('click', removeLiquidity);
+    }
     
     // Pool
     elements.poolAddBtn.addEventListener('click', () => switchTab('liquidity'));
@@ -174,20 +238,40 @@ async function connectWallet() {
     try {
         showLoading('连接钱包中...');
         
-        // Request account access
-        const accounts = await window.ethereum.request({ 
-            method: 'eth_requestAccounts' 
-        });
-        
-        if (accounts.length === 0) {
-            throw new Error('未选择账户');
+        // Check if MetaMask is available
+        if (typeof window.ethereum !== 'undefined') {
+            // Request account access
+            const accounts = await window.ethereum.request({ 
+                method: 'eth_requestAccounts' 
+            });
+            
+            if (accounts.length === 0) {
+                throw new Error('未选择账户');
+            }
+            
+            userState.account = accounts[0];
+            
+            // Initialize provider and signer
+            if (typeof ethers !== 'undefined') {
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                
+                await updateUserBalances();
+            } else {
+                // Fallback to demo mode
+                userState.account = '0x' + '0'.repeat(40); // Demo address
+                userState.balanceETH = 10;
+                userState.balanceUSDT = 10000;
+            }
+        } else {
+            // Demo mode - simulate wallet connection
+            userState.account = '0x' + '0'.repeat(40); // Demo address
+            userState.balanceETH = 10;
+            userState.balanceUSDT = 10000;
+            showNotification('演示模式：使用模拟钱包', 'warning');
         }
         
-        userState.account = accounts[0];
-        signer = provider.getSigner();
         userState.connected = true;
-        
-        await updateUserBalances();
         updateUI();
         
         hideLoading();
@@ -196,6 +280,16 @@ async function connectWallet() {
         hideLoading();
         showNotification('连接钱包失败: ' + error.message, 'error');
         console.error('Wallet connection error:', error);
+        
+        // Fallback to demo mode on error
+        if (!userState.connected) {
+            enableDemoMode();
+            userState.account = '0x' + '0'.repeat(40);
+            userState.balanceETH = 10;
+            userState.balanceUSDT = 10000;
+            userState.connected = true;
+            updateUI();
+        }
     }
 }
 
@@ -215,20 +309,33 @@ async function updateUserBalances() {
     if (!userState.connected) return;
     
     try {
-        // Get ETH balance
-        const ethBalance = await signer.getBalance();
-        userState.balanceETH = parseFloat(ethers.utils.formatEther(ethBalance));
+        // Check if we have a real signer (MetaMask connected)
+        if (signer && typeof signer.getBalance === 'function') {
+            // Get ETH balance from real wallet
+            const ethBalance = await signer.getBalance();
+            userState.balanceETH = parseFloat(ethers.utils.formatEther(ethBalance));
+        } else {
+            // Demo mode - keep demo balances or use existing
+            if (userState.balanceETH === 0) {
+                userState.balanceETH = 10;
+            }
+        }
         
         // For demo, simulate USDT balance (实际应该从合约读取)
-        userState.balanceUSDT = 1000; // 模拟余额
+        if (userState.balanceUSDT === 0) {
+            userState.balanceUSDT = 10000; // 模拟余额
+        }
         
         // Calculate LP balance based on user's contribution
-        if (poolState.totalSupply > 0) {
+        if (poolState.totalSupply > 0 && userState.lpBalance === 0) {
             // 简化计算：假设用户持有一定比例的LP代币
             userState.lpBalance = poolState.totalSupply * 0.1; // 10% for demo
         }
     } catch (error) {
         console.error('Error updating balances:', error);
+        // Fallback to demo balances
+        if (userState.balanceETH === 0) userState.balanceETH = 10;
+        if (userState.balanceUSDT === 0) userState.balanceUSDT = 10000;
     }
 }
 
