@@ -266,20 +266,50 @@ async function connectWallet() {
         showLoading('连接钱包中...');
         
         if (typeof window.ethereum !== 'undefined') {
-            // First, request permissions to force account selection dialog
+            // Step 1: Check existing permissions and revoke if needed
+            try {
+                const permissions = await window.ethereum.request({
+                    method: 'wallet_getPermissions'
+                });
+                
+                // If permissions exist, revoke them first to force fresh selection
+                if (permissions && permissions.length > 0) {
+                    for (const permission of permissions) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_revokePermissions',
+                                params: [permission]
+                            });
+                        } catch (revokeError) {
+                            console.log('Could not revoke permission:', revokeError);
+                            // Continue anyway
+                        }
+                    }
+                    // Small delay to ensure revocation is processed
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } catch (permCheckError) {
+                console.log('Permission check failed:', permCheckError);
+                // Continue anyway
+            }
+            
+            // Step 2: Request new permissions (this will show account selection)
             try {
                 await window.ethereum.request({
                     method: 'wallet_requestPermissions',
                     params: [{ eth_accounts: {} }]
                 });
             } catch (permError) {
-                // If user denies permission, still try to get accounts
-                if (permError.code !== 4001) {
-                    console.log('Permission request failed, trying direct account request');
+                // If user denies permission, handle it
+                if (permError.code === 4001) {
+                    hideLoading();
+                    showNotification('用户取消了连接', 'warning');
+                    return;
                 }
+                console.log('Permission request failed, trying direct account request');
             }
             
-            // Then get accounts (this will show selection if multiple accounts)
+            // Step 3: Get accounts (should show selection dialog if multiple accounts)
             const accounts = await window.ethereum.request({ 
                 method: 'eth_requestAccounts' 
             });
@@ -288,7 +318,7 @@ async function connectWallet() {
                 throw new Error('未选择账户');
             }
             
-            // Use the selected account (user should have selected via permission dialog)
+            // Use the selected account
             userState.account = accounts[0];
             
             if (typeof ethers !== 'undefined') {
@@ -385,7 +415,7 @@ async function switchWallet() {
 }
 
 // Disconnect Wallet
-function disconnectWallet() {
+async function disconnectWallet() {
     if (!userState.connected) {
         return;
     }
@@ -405,10 +435,30 @@ function disconnectWallet() {
     if (elements.swapToAmount) elements.swapToAmount.value = '';
     resetSwapInfo();
     
-    // Note: MetaMask doesn't provide a direct way to revoke permissions
-    // But clearing state allows fresh connection with account selection
-    // The next connectWallet() call will use wallet_requestPermissions
-    // which will show the account selection dialog
+    // Try to revoke permissions to ensure fresh connection next time
+    if (typeof window.ethereum !== 'undefined') {
+        try {
+            const permissions = await window.ethereum.request({
+                method: 'wallet_getPermissions'
+            });
+            
+            if (permissions && permissions.length > 0) {
+                for (const permission of permissions) {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_revokePermissions',
+                            params: [permission]
+                        });
+                    } catch (revokeError) {
+                        console.log('Could not revoke permission:', revokeError);
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('Error revoking permissions:', error);
+            // Continue anyway - permissions will be revoked on next connect
+        }
+    }
     
     updateUI();
     showNotification('钱包已断开，下次连接时可重新选择账户', 'warning');
