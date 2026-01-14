@@ -472,6 +472,23 @@ body::before {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+/* 确保表头和数据行的对齐方式一致 */
+.data-table th.col-rank,
+.data-table td.col-rank {
+    text-align: center;
+}
+
+.data-table th.col-asset-size,
+.data-table td.col-asset-size {
+    text-align: right;
+}
+
+.data-table th.col-actions,
+.data-table td.col-actions {
+    text-align: center;
 }
 
 .data-table tbody tr {
@@ -486,6 +503,7 @@ body::before {
 .data-table td {
     padding: 1rem;
     color: var(--text-primary);
+    vertical-align: middle;
 }
 
 .col-rank {
@@ -798,6 +816,10 @@ body::before {
 
 .col-actions {
     min-width: 80px;
+    text-align: center;
+}
+
+.data-table th.col-actions {
     text-align: center;
 }
 
