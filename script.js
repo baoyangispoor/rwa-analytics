@@ -724,6 +724,11 @@ function loadResearchData() {
                 DAPE: data.DAPE || []
             };
             
+            // 保存headers信息（如果存在）
+            if (data.headers) {
+                researchData.headers = data.headers;
+            }
+            
             console.log('研究数据加载成功（内嵌数据）:', {
                 RWA: researchData.RWA.length,
                 DAT: researchData.DAT.length,
@@ -877,19 +882,55 @@ function formatAssetSize(value) {
 }
 
 // 创建研究数据表格行
-function createResearchRow(item, index) {
+function createResearchRow(item, index, category = 'RWA') {
     if (!item) {
         console.error('项目数据为空');
         return null;
     }
     
     const row = document.createElement('tr');
-    const projectName = (item['项目名称'] || 'N/A').toString();
-    const platform = (item['发行方 / 平台'] || 'N/A').toString();
-    const status = (item['当前状态'] || 'N/A').toString();
-    const assetType = (item['资产类型'] || 'N/A').toString();
-    const assetSize = formatAssetSize(item['资产规模（USD）']);
-    const score = (item['币链评分（0-100）'] || 'N/A').toString();
+    
+    // 根据类别获取正确的字段名
+    let projectName, platform, status, assetType, assetSize, score;
+    
+    if (category === 'RWA') {
+        projectName = item['项目名称'] || '';
+        platform = item['发行方 / 平台'] || '';
+        status = item['项目状态'] || item['当前状态'] || '';
+        assetType = item['行业'] || item['资产类型'] || '';
+        assetSize = formatAssetSize(item['资产规模（USD）'] || item['金库规模（USD）'] || '');
+        score = item['币链评分（0-100）'] || '';
+    } else if (category === 'DAT') {
+        projectName = item['项目名称'] || '';
+        platform = item['公司主体'] || item['发行方 / 平台'] || '';
+        status = item['项目状态'] || '';
+        assetType = item['行业赛道'] || '';
+        assetSize = formatAssetSize(item['金库规模（USD）'] || item['资产规模（USD）'] || '');
+        score = item['币链评分（0-100）'] || '';
+    } else if (category === 'DAPE') {
+        projectName = item['标的简称'] || item['项目名称'] || '';
+        platform = item['投资方'] || item['公司主体'] || item['发行方 / 平台'] || '';
+        status = item['项目状态'] || '';
+        assetType = item['一句话简介'] || '';
+        assetSize = formatAssetSize(item['金额'] || item['募资金额'] || '');
+        score = '';
+    } else {
+        // 默认尝试所有可能的字段
+        projectName = item['标的简称'] || item['项目名称'] || '';
+        platform = item['公司主体'] || item['发行方 / 平台'] || item['投资方'] || '';
+        status = item['项目状态'] || item['当前状态'] || '';
+        assetType = item['行业赛道'] || item['行业'] || item['资产类型'] || item['一句话简介'] || '';
+        assetSize = formatAssetSize(item['金额'] || item['募资金额'] || item['资产规模（USD）'] || item['金库规模（USD）'] || '');
+        score = item['币链评分（0-100）'] || '';
+    }
+    
+    // 转换为字符串并处理空值
+    projectName = projectName.toString() || 'N/A';
+    platform = platform.toString() || 'N/A';
+    status = status.toString() || 'N/A';
+    assetType = assetType.toString() || 'N/A';
+    assetSize = assetSize.toString() || 'N/A';
+    score = score.toString() || 'N/A';
     
     // 转义HTML防止XSS
     const escapeHtml = (text) => {
@@ -898,7 +939,7 @@ function createResearchRow(item, index) {
         return div.innerHTML;
     };
     
-    const firstChar = projectName && projectName.length > 0 ? projectName.charAt(0) : '?';
+    const firstChar = projectName && projectName !== 'N/A' && projectName.length > 0 ? projectName.charAt(0) : '?';
     
     row.innerHTML = `
         <td class="col-rank">${index + 1}</td>
@@ -924,7 +965,7 @@ function createResearchRow(item, index) {
     const detailBtn = row.querySelector('.view-details-btn');
     if (detailBtn) {
         detailBtn.addEventListener('click', () => {
-            showProjectDetails(item);
+            showProjectDetails(item, category);
         });
     }
     
@@ -983,7 +1024,7 @@ function filterResearchData(category) {
     
     filteredData.forEach((item, index) => {
         try {
-            const row = createResearchRow(item, index);
+            const row = createResearchRow(item, index, category);
             if (row) {
                 tbody.appendChild(row);
             }
@@ -994,7 +1035,7 @@ function filterResearchData(category) {
 }
 
 // 显示项目详情
-function showProjectDetails(item) {
+function showProjectDetails(item, category = 'RWA') {
     if (!item) {
         console.error('项目数据为空');
         return;
@@ -1009,7 +1050,13 @@ function showProjectDetails(item) {
         return;
     }
     
-    const projectName = (item['项目名称'] || '项目详情').toString();
+    // 根据类别获取项目名称
+    let projectName;
+    if (category === 'DAPE') {
+        projectName = (item['标的简称'] || item['项目名称'] || '项目详情').toString();
+    } else {
+        projectName = (item['项目名称'] || '项目详情').toString();
+    }
     modalTitle.textContent = projectName;
     
     // 转义HTML
@@ -1030,22 +1077,70 @@ function showProjectDetails(item) {
         return escapeHtml(text || urlStr);
     };
     
-    // 重要字段列表
-    const importantFields = [
-        '项目名称', '发行方 / 平台', '发行时间', '发行地区 / 监管框架',
-        '当前状态', '资产类型', '资产说明', '资产规模（USD）',
-        '现金流特征', '托管 / 审计方', 'Token 名称 / 符号', 'Token 类型',
-        '经济属性', '投资/消费属性', '收益分配方式', '年化收益率（APY）',
-        '币链评分（0-100）', '投资逻辑摘要', '风险点', '复盘结论',
-        '链上地址', '可视化仪表盘', '法律文件', '标签'
+    // 核心必填字段（按照用户要求）
+    const coreFields = [
+        '项目名称', '发行方 / 平台', '发行时间', '发行地区 / 监管框架（SPV）',
+        '底层资产地区', '行业', '资产形态', '权利类型', 'Token 类型',
+        '募资金额', '融资币种', '交易所 / 承销', '资产规模（USD）'
     ];
     
+    // 其他重要字段
+    const additionalFields = [
+        '标的简称', '公司主体', '行业赛道', '项目状态', '当前状态',
+        '资产类型', '资产说明', '现金流特征', '托管 / 审计方', 
+        '托管', '托管机构', '审计方', 'Token 名称 / 符号',
+        '经济属性', '投资/消费属性', '收益分配方式', '年化收益率（APY）',
+        '币链评分（0-100）', '投资逻辑摘要', '风险点', '复盘结论',
+        '链上地址', '可视化仪表盘', '法律文件', '标签', '一句话简介',
+        '交易时间', '轮次', '金额', '投资方', '金库规模（USD）',
+        '公链 / 合约标准', '辖区（上市/运营）', 'DAT目标', '合规路径'
+    ];
+    
+    // 合并所有字段，核心字段在前
+    const allFields = [...coreFields];
+    additionalFields.forEach(field => {
+        if (!allFields.includes(field)) {
+            allFields.push(field);
+        }
+    });
+    
     let html = '<div class="detail-grid">';
-    importantFields.forEach(field => {
+    
+    // 先显示核心字段
+    html += '<div class="detail-section"><h3 style="color: var(--accent-cyan); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">核心信息</h3></div>';
+    
+    coreFields.forEach(field => {
         let value = item[field] || '';
-        if (value && value !== 'N/A' && value !== '') {
+        // 对于DAPE类别，特殊处理字段映射
+        if (category === 'DAPE' && field === '项目名称' && !value) {
+            value = item['标的简称'] || '';
+        }
+        if (category === 'DAT' && field === '发行方 / 平台' && !value) {
+            value = item['公司主体'] || '';
+        }
+        if (category === 'RWA' && field === '行业' && !value) {
+            value = item['行业赛道'] || '';
+        }
+        
+        if (value && value !== 'N/A' && value !== '' && String(value).trim() !== '') {
+            value = escapeHtml(value.toString());
+            html += `
+                <div class="detail-item">
+                    <div class="detail-label">${escapeHtml(field)}</div>
+                    <div class="detail-value">${value}</div>
+                </div>
+            `;
+        }
+    });
+    
+    // 再显示其他字段
+    html += '<div class="detail-section" style="margin-top: 2rem;"><h3 style="color: var(--accent-cyan); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">其他信息</h3></div>';
+    
+    additionalFields.forEach(field => {
+        let value = item[field] || '';
+        if (value && value !== 'N/A' && value !== '' && String(value).trim() !== '') {
             // 特殊处理链接字段
-            if (field === '可视化仪表盘' || field === '链上地址' || field === '法律文件') {
+            if (field === '可视化仪表盘' || field === '链上地址' || field === '法律文件' || field === '项目链接' || field === '白皮书') {
                 value = createLink(value, value);
             } else {
                 value = escapeHtml(value.toString());
@@ -1059,6 +1154,7 @@ function showProjectDetails(item) {
             `;
         }
     });
+    
     html += '</div>';
     
     modalBody.innerHTML = html;
