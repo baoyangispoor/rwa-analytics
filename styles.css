@@ -183,19 +183,27 @@ body {
     margin-top: 60px;
     min-height: calc(100vh - 60px);
     transition: margin-left 0.3s ease;
+    position: relative;
 }
 
 .main-content.sidebar-open {
     margin-left: 280px;
 }
 
+@media (max-width: 968px) {
+    .main-content.sidebar-open {
+        margin-left: 0;
+    }
+}
+
 .chat-container {
     max-width: 900px;
     margin: 0 auto;
     padding: 2rem;
-    min-height: calc(100vh - 60px);
+    min-height: calc(100vh - 120px);
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 
 /* Welcome Screen */

@@ -7,53 +7,89 @@ const DEEPSEEK_API_KEY = 'YOUR_DEEPSEEK_API_KEY'; // 需要替换为实际的API
 let chatHistory = [];
 let currentChatId = null;
 
-// DOM元素
-const sidebar = document.getElementById('sidebar');
-const sidebarToggle = document.getElementById('sidebar-toggle');
-const newChatBtn = document.getElementById('new-chat-btn');
-const newChatSidebar = document.getElementById('new-chat-sidebar');
-const chatMessages = document.getElementById('chat-messages');
-const welcomeScreen = document.getElementById('welcome-screen');
-const inputArea = document.getElementById('input-area');
-const chatInput = document.getElementById('chat-input');
-const messageInput = document.getElementById('message-input');
-const sendBtn = document.getElementById('send-btn');
-const sendBtnSmall = document.getElementById('send-btn-small');
-const chatHistoryContainer = document.getElementById('chat-history');
+// DOM元素（延迟初始化，确保DOM已加载）
+let sidebar, sidebarToggle, newChatBtn, newChatSidebar;
+let chatMessages, welcomeScreen, inputArea;
+let chatInput, messageInput, sendBtn, sendBtnSmall;
+let chatHistoryContainer;
+
+// 初始化DOM元素
+function initDOMElements() {
+    sidebar = document.getElementById('sidebar');
+    sidebarToggle = document.getElementById('sidebar-toggle');
+    newChatBtn = document.getElementById('new-chat-btn');
+    newChatSidebar = document.getElementById('new-chat-sidebar');
+    chatMessages = document.getElementById('chat-messages');
+    welcomeScreen = document.getElementById('welcome-screen');
+    inputArea = document.getElementById('input-area');
+    chatInput = document.getElementById('chat-input');
+    messageInput = document.getElementById('message-input');
+    sendBtn = document.getElementById('send-btn');
+    sendBtnSmall = document.getElementById('send-btn-small');
+    chatHistoryContainer = document.getElementById('chat-history');
+}
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化DOM元素
+    initDOMElements();
+    
+    // 检查关键元素是否存在
+    if (!sidebar || !chatMessages || !welcomeScreen) {
+        console.error('关键DOM元素未找到');
+        return;
+    }
+
     // 侧边栏切换
-    sidebarToggle.addEventListener('click', function() {
-        sidebar.classList.toggle('open');
-        document.querySelector('.main-content').classList.toggle('sidebar-open');
-    });
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('open');
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent) {
+                mainContent.classList.toggle('sidebar-open');
+            }
+        });
+    }
 
     // 新聊天按钮
-    newChatBtn.addEventListener('click', startNewChat);
-    newChatSidebar.addEventListener('click', startNewChat);
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', startNewChat);
+    }
+    if (newChatSidebar) {
+        newChatSidebar.addEventListener('click', startNewChat);
+    }
 
     // 发送消息
-    sendBtn.addEventListener('click', handleSendMessage);
-    sendBtnSmall.addEventListener('click', handleSendMessage);
+    if (sendBtn) {
+        sendBtn.addEventListener('click', handleSendMessage);
+    }
+    if (sendBtnSmall) {
+        sendBtnSmall.addEventListener('click', handleSendMessage);
+    }
 
     // 回车发送
-    chatInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
+    if (chatInput) {
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+    }
 
-    messageInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
+    if (messageInput) {
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+    }
 
     // 加载聊天历史
     loadChatHistory();
+    
+    console.log('Bitchain AI 初始化完成');
 });
 
 // 开始新聊天
@@ -187,6 +223,11 @@ function getMockResponse(message) {
 
 // 添加消息到聊天界面
 function addMessage(role, content) {
+    if (!chatMessages) {
+        console.error('chatMessages元素未找到');
+        return;
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message message-${role}`;
     
@@ -200,7 +241,9 @@ function addMessage(role, content) {
     chatMessages.appendChild(messageDiv);
     
     // 滚动到底部
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    setTimeout(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }, 100);
 }
 
 // 格式化消息内容
@@ -226,6 +269,11 @@ function formatMessage(text) {
 
 // 添加加载动画
 function addLoadingMessage() {
+    if (!chatMessages) {
+        console.error('chatMessages元素未找到');
+        return 'loading-message';
+    }
+    
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'message message-assistant';
     loadingDiv.id = 'loading-message';
@@ -242,7 +290,11 @@ function addLoadingMessage() {
     loadingDiv.appendChild(contentDiv);
     chatMessages.appendChild(loadingDiv);
     
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    setTimeout(() => {
+        if (chatMessages) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }, 100);
     
     return 'loading-message';
 }
