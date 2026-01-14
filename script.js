@@ -567,21 +567,50 @@ async function updateUserBalances() {
 // Get Quote from 1inch API
 async function getQuote(fromToken, toToken, amount) {
     try {
-        const fromAddress = CONFIG.tokens[fromToken].address;
-        const toAddress = CONFIG.tokens[toToken].address;
-        const decimals = CONFIG.tokens[fromToken].decimals;
+        if (!fromToken || !toToken || !amount || amount <= 0) {
+            throw new Error('无效的交换参数');
+        }
+        
+        const fromAddress = CONFIG.tokens[fromToken]?.address;
+        const toAddress = CONFIG.tokens[toToken]?.address;
+        const decimals = CONFIG.tokens[fromToken]?.decimals;
+        
+        if (!fromAddress || !toAddress || !decimals) {
+            throw new Error('代币配置错误');
+        }
         
         // Convert amount to wei/smallest unit
         const amountInWei = ethers.utils.parseUnits(amount.toString(), decimals).toString();
         
+        // Build 1inch API URL
         const url = `${CONFIG.oneInchApiUrl}/quote?fromTokenAddress=${fromAddress}&toTokenAddress=${toAddress}&amount=${amountInWei}`;
         
-        const response = await fetch(url);
+        console.log('Fetching quote from 1inch:', { fromToken, toToken, amount });
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        
         if (!response.ok) {
-            throw new Error('获取报价失败');
+            const errorText = await response.text().catch(() => 'Unknown error');
+            console.error('1inch API error:', response.status, errorText);
+            throw new Error(`获取报价失败: ${response.status}`);
         }
         
         const data = await response.json();
+        
+        if (!data || !data.toTokenAmount) {
+            throw new Error('无效的报价响应');
+        }
+        
+        console.log('Quote received:', {
+            fromAmount: amount,
+            toAmount: ethers.utils.formatUnits(data.toTokenAmount, CONFIG.tokens[toToken].decimals)
+        });
+        
         return data;
     } catch (error) {
         console.error('Error getting quote:', error);
@@ -664,6 +693,7 @@ async function handleSwapInput() {
         // Display output amount
         if (elements.swapToAmount) {
             elements.swapToAmount.value = amountOut.toFixed(6);
+            elements.swapToAmount.style.color = '';
         }
         
         // Store quote for later use
@@ -767,30 +797,6 @@ async function handleSwapInput() {
         if (error.message && !error.message.includes('用户取消')) {
             showNotification('获取报价失败，请稍后重试', 'error');
         }
-    }
-}
-        const gasCost = gasPrice.mul(quote.estimatedGas);
-        const gasCostEth = parseFloat(ethers.utils.formatEther(gasCost));
-        const ethPrice = 2000; // Simplified - would fetch from API
-        const gasCostUsd = gasCostEth * ethPrice;
-        elements.gasEstimate.textContent = `~$${gasCostUsd.toFixed(2)}`;
-        
-        // Best DEX (from 1inch protocol name)
-        elements.bestDex.textContent = quote.protocols?.[0]?.[0]?.[0]?.name || '1inch';
-        
-        swapState.quote = quote;
-        swapState.gasEstimate = gasCostEth;
-        swapState.bestDex = elements.bestDex.textContent;
-        
-        // Enable swap button
-        elements.swapBtn.disabled = !userState.connected || fromAmount <= 0;
-        
-        hideLoading();
-    } catch (error) {
-        hideLoading();
-        console.error('Error getting quote:', error);
-        showNotification('获取报价失败: ' + error.message, 'error');
-        elements.swapBtn.disabled = true;
     }
 }
 
