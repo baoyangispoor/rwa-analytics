@@ -81,19 +81,26 @@ const rwaCache = {
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2秒后重试
 
-// DOM元素
-const btcPriceHero = document.getElementById('btc-price-hero');
-const ethPriceHero = document.getElementById('eth-price-hero');
-const btcChangeHero = document.getElementById('btc-change-hero');
-const ethChangeHero = document.getElementById('eth-change-hero');
-const totalMarketCapHero = document.getElementById('total-market-cap-hero');
-const totalChangeHero = document.getElementById('total-change-hero');
-const refreshBtn = document.getElementById('refresh-btn');
-const autoRefreshCheckbox = document.getElementById('auto-refresh');
-const rwaTableBody = document.getElementById('rwa-table-body');
+// DOM元素（延迟初始化，确保DOM已加载）
+let btcPriceHero, ethPriceHero, btcChangeHero, ethChangeHero;
+let totalMarketCapHero, totalChangeHero;
+let refreshBtn, autoRefreshCheckbox, rwaTableBody;
 let filterButtons = null; // 将在DOM加载后初始化
 let currentCategory = 'all';
 let rwaProjectsData = []; // 存储所有RWA项目数据
+
+// 初始化DOM元素
+function initDOMElements() {
+    btcPriceHero = document.getElementById('btc-price-hero');
+    ethPriceHero = document.getElementById('eth-price-hero');
+    btcChangeHero = document.getElementById('btc-change-hero');
+    ethChangeHero = document.getElementById('eth-change-hero');
+    totalMarketCapHero = document.getElementById('total-market-cap-hero');
+    totalChangeHero = document.getElementById('total-change-hero');
+    refreshBtn = document.getElementById('refresh-btn');
+    autoRefreshCheckbox = document.getElementById('auto-refresh');
+    rwaTableBody = document.getElementById('rwa-table-body');
+}
 
 // 存储上次价格用于计算变化
 let lastPrices = {
@@ -1133,6 +1140,9 @@ function showProjectDetails(item, category = 'RWA') {
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', () => {
+    // 初始化DOM元素
+    initDOMElements();
+    
     // 初始化RWA项目筛选按钮
     filterButtons = document.querySelectorAll('.filter-chip:not(.research-filter)');
     
@@ -1151,6 +1161,11 @@ document.addEventListener('DOMContentLoaded', () => {
             filterResearchData(category);
         });
     });
+    
+    // 手动刷新按钮
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', fetchPrices);
+    }
     
     // 模态框关闭事件
     const modal = document.getElementById('project-modal');
@@ -1171,12 +1186,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 加载数据
+    // 立即加载数据
     fetchPrices();
     fetchRWAProjects();
     loadResearchData();
     
-    if (autoRefreshCheckbox.checked) {
+    // 自动刷新控制
+    if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
         startAutoRefresh();
     }
     
