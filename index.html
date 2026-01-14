@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEX聚合器 - 去中心化交易所</title>
+    <title>Bitchain DEX - 去中心化交易所聚合器</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,27 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-                    <h1>DEX聚合器</h1>
-                    <span class="logo-subtitle">最优价格 · 真实交易</span>
+                    <img src="logo.png" alt="Bitchain DEX" class="logo-image" id="logo-image" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';">
+                    <div class="logo-fallback" id="logo-fallback" style="display: none;">
+                        <svg width="48" height="48" viewBox="0 0 48 48" class="logo-svg">
+                            <!-- 3D立方体框架 -->
+                            <g transform="translate(24, 24)">
+                                <!-- 立方体顶部 -->
+                                <polygon points="-12,-8 12,-8 12,8 -12,8" fill="none" stroke="#FFD700" stroke-width="2" transform="rotate(-20) rotateY(45) translateZ(8)"/>
+                                <!-- 立方体底部 -->
+                                <polygon points="-12,-8 12,-8 12,8 -12,8" fill="none" stroke="#FF8C00" stroke-width="2" transform="rotate(20) rotateY(45) translateZ(-8)"/>
+                                <!-- 连接线 -->
+                                <line x1="-12" y1="-8" x2="-12" y2="8" stroke="#FFD700" stroke-width="2"/>
+                                <line x1="12" y1="-8" x2="12" y2="8" stroke="#FF8C00" stroke-width="2"/>
+                            </g>
+                            <!-- 轨道环 -->
+                            <path d="M 8 40 Q 24 8, 40 8" fill="none" stroke="#FF8C00" stroke-width="3" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>Bitchain DEX</h1>
+                        <span class="logo-subtitle">最优价格 · 真实交易</span>
+                    </div>
                 </div>
                 <div class="wallet-section">
                     <button class="btn btn-primary" id="connect-wallet-btn">
@@ -48,7 +67,7 @@
                 <!-- Swap Card -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>交换代币</h2>
+                        <h2>Bitchain DEX 交换</h2>
                         <div class="dex-badges" id="dex-badges">
                             <span class="badge">1inch</span>
                             <span class="badge">Uniswap</span>
@@ -115,7 +134,7 @@
                             交换
                         </button>
                         <div class="swap-disclaimer">
-                            <small>通过1inch聚合器执行，自动选择最优价格</small>
+                            <small>Bitchain DEX 通过1inch聚合器执行，自动选择最优价格</small>
                         </div>
                     </div>
                 </div>
