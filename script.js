@@ -1048,7 +1048,7 @@ function showProjectDetails(item, category = 'RWA') {
 }
 
 
-// 页面加载时初始化 - 彻底重构版本
+// 页面加载时初始化 - 确保数据能正常加载
 function initializeApp() {
     console.log('开始初始化应用...');
     
@@ -1057,8 +1057,8 @@ function initializeApp() {
     console.log('DOM元素初始化完成');
     
     // 验证关键元素
-    if (!btcPriceHero || !ethPriceHero) {
-        console.error('关键DOM元素未找到，等待DOM加载...');
+    if (!btcPriceHero || !ethPriceHero || !rwaTableBody) {
+        console.warn('部分DOM元素未找到，等待DOM加载...');
         setTimeout(initializeApp, 100);
         return;
     }
@@ -1109,11 +1109,32 @@ function initializeApp() {
         });
     }
     
-    // 立即加载数据
+    // 立即加载数据（确保顺序执行）
     console.log('开始加载数据...');
-    fetchPrices();
-    fetchRWAProjects();
-    loadResearchData();
+    
+    // 先加载研究数据（内嵌数据，最快）
+    try {
+        loadResearchData();
+        console.log('研究数据加载完成');
+    } catch (error) {
+        console.error('研究数据加载失败:', error);
+    }
+    
+    // 然后加载RWA项目（立即显示基本列表）
+    try {
+        fetchRWAProjects();
+        console.log('RWA项目加载完成');
+    } catch (error) {
+        console.error('RWA项目加载失败:', error);
+    }
+    
+    // 最后加载价格数据
+    try {
+        fetchPrices();
+        console.log('价格数据加载完成');
+    } catch (error) {
+        console.error('价格数据加载失败:', error);
+    }
     
     // 自动刷新控制
     if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
