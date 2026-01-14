@@ -241,9 +241,19 @@ function debounce(func, wait) {
 // Check if already connected
 async function checkConnection() {
     try {
+        // Only auto-connect if user explicitly connected before
+        // Don't auto-connect on page load to allow account selection
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-            await connectWallet();
+        if (accounts.length > 0 && userState.connected) {
+            // Only reconnect if we were previously connected
+            // This prevents auto-connecting on page load
+            userState.account = accounts[0];
+            if (typeof ethers !== 'undefined') {
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                await updateUserBalances();
+            }
+            updateUI();
         }
     } catch (error) {
         console.error('Error checking connection:', error);
@@ -256,6 +266,20 @@ async function connectWallet() {
         showLoading('连接钱包中...');
         
         if (typeof window.ethereum !== 'undefined') {
+            // First, request permissions to force account selection dialog
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_requestPermissions',
+                    params: [{ eth_accounts: {} }]
+                });
+            } catch (permError) {
+                // If user denies permission, still try to get accounts
+                if (permError.code !== 4001) {
+                    console.log('Permission request failed, trying direct account request');
+                }
+            }
+            
+            // Then get accounts (this will show selection if multiple accounts)
             const accounts = await window.ethereum.request({ 
                 method: 'eth_requestAccounts' 
             });
@@ -264,6 +288,7 @@ async function connectWallet() {
                 throw new Error('未选择账户');
             }
             
+            // Use the selected account (user should have selected via permission dialog)
             userState.account = accounts[0];
             
             if (typeof ethers !== 'undefined') {
@@ -287,7 +312,12 @@ async function connectWallet() {
         showNotification('钱包连接成功', 'success');
     } catch (error) {
         hideLoading();
-        showNotification('连接钱包失败: ' + error.message, 'error');
+        
+        if (error.code === 4001) {
+            showNotification('用户取消了连接', 'warning');
+        } else {
+            showNotification('连接钱包失败: ' + error.message, 'error');
+        }
         console.error('Wallet connection error:', error);
         
         if (!userState.connected) {
@@ -375,8 +405,13 @@ function disconnectWallet() {
     if (elements.swapToAmount) elements.swapToAmount.value = '';
     resetSwapInfo();
     
+    // Note: MetaMask doesn't provide a direct way to revoke permissions
+    // But clearing state allows fresh connection with account selection
+    // The next connectWallet() call will use wallet_requestPermissions
+    // which will show the account selection dialog
+    
     updateUI();
-    showNotification('钱包已断开', 'warning');
+    showNotification('钱包已断开，下次连接时可重新选择账户', 'warning');
 }
 
 // Update User Balances
