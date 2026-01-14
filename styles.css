@@ -819,10 +819,6 @@ body::before {
     text-align: center;
 }
 
-.data-table th.col-actions {
-    text-align: center;
-}
-
 .view-details-btn {
     padding: 0.5rem 1rem;
     background: var(--accent-blue);
