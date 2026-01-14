@@ -177,14 +177,34 @@ function setupEventListeners() {
     
     // Wallet connection
     if (elements.connectWalletBtn) {
+        // Remove any existing listeners to avoid duplicates
+        const newBtn = elements.connectWalletBtn.cloneNode(true);
+        elements.connectWalletBtn.parentNode.replaceChild(newBtn, elements.connectWalletBtn);
+        elements.connectWalletBtn = newBtn;
+        
         elements.connectWalletBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             console.log('Connect wallet button clicked');
             showWalletModal();
         });
+        console.log('Connect wallet button event listener attached');
     } else {
         console.error('Connect wallet button not found');
+        // Try to find it again after a delay
+        setTimeout(() => {
+            const btn = document.getElementById('connect-wallet-btn');
+            if (btn) {
+                elements.connectWalletBtn = btn;
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Connect wallet button clicked (delayed)');
+                    showWalletModal();
+                });
+                console.log('Connect wallet button found and attached (delayed)');
+            }
+        }, 500);
     }
     
     // Switch wallet
@@ -228,46 +248,58 @@ function setupEventListeners() {
     }
     
     // Wallet Options - Use event delegation for better reliability
-    if (elements.walletModal) {
-        const walletModalBody = elements.walletModal.querySelector('.modal-body');
-        if (walletModalBody) {
-            walletModalBody.addEventListener('click', (e) => {
-                const walletOption = e.target.closest('.wallet-option');
-                if (walletOption) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const walletType = walletOption.dataset.wallet;
-                    if (walletType) {
-                        console.log('Wallet option clicked:', walletType);
-                        handleWalletSelection(walletType);
+    const setupWalletModalEvents = () => {
+        let walletModal = elements.walletModal;
+        if (!walletModal) {
+            walletModal = document.getElementById('wallet-modal');
+            if (walletModal) {
+                elements.walletModal = walletModal;
+            }
+        }
+        
+        if (walletModal) {
+            const walletModalBody = walletModal.querySelector('.modal-body');
+            if (walletModalBody) {
+                walletModalBody.addEventListener('click', (e) => {
+                    const walletOption = e.target.closest('.wallet-option');
+                    if (walletOption) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const walletType = walletOption.dataset.wallet;
+                        if (walletType) {
+                            console.log('Wallet option clicked:', walletType);
+                            handleWalletSelection(walletType);
+                        }
                     }
+                });
+            }
+            
+            // Close modal when clicking background
+            walletModal.addEventListener('click', (e) => {
+                if (e.target === walletModal) {
+                    hideWalletModal();
                 }
             });
         }
         
-        // Close modal when clicking background
-        elements.walletModal.addEventListener('click', (e) => {
-            if (e.target === elements.walletModal) {
-                hideWalletModal();
-            }
-        });
-    }
-    
-    // Fallback: bind directly to options after a short delay
-    setTimeout(() => {
-        const walletOptions = document.querySelectorAll('.wallet-option');
-        walletOptions.forEach(option => {
-            option.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const walletType = option.dataset.wallet;
-                if (walletType) {
-                    console.log('Wallet option clicked (direct):', walletType);
-                    handleWalletSelection(walletType);
-                }
+        // Fallback: bind directly to options
+        setTimeout(() => {
+            const walletOptions = document.querySelectorAll('.wallet-option');
+            walletOptions.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const walletType = option.dataset.wallet;
+                    if (walletType) {
+                        console.log('Wallet option clicked (direct):', walletType);
+                        handleWalletSelection(walletType);
+                    }
+                });
             });
-        });
-    }, 300);
+        }, 100);
+    };
+    
+    setupWalletModalEvents();
     
     // Binance QR Modal
     if (elements.binanceQrClose) {
@@ -1040,13 +1072,23 @@ function showNotification(message, type = 'success') {
 // Show Wallet Selection Modal
 function showWalletModal() {
     console.log('showWalletModal called');
-    if (elements.walletModal) {
-        elements.walletModal.style.display = 'flex';
+    
+    // Try to get modal element if not in elements object
+    let walletModal = elements.walletModal;
+    if (!walletModal) {
+        walletModal = document.getElementById('wallet-modal');
+        if (walletModal) {
+            elements.walletModal = walletModal;
+        }
+    }
+    
+    if (walletModal) {
+        walletModal.style.display = 'flex';
+        walletModal.style.zIndex = '1000';
         console.log('Wallet modal displayed');
-        // Ensure modal is on top
-        elements.walletModal.style.zIndex = '1000';
     } else {
         console.error('Wallet modal element not found');
+        showNotification('钱包选择界面加载失败，请刷新页面', 'error');
     }
 }
 
