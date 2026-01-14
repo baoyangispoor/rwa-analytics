@@ -159,6 +159,86 @@
     <!-- Notification -->
     <div class="notification" id="notification"></div>
 
+    <!-- Wallet Selection Modal -->
+    <div class="modal" id="wallet-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>选择钱包</h3>
+                <button class="modal-close" id="wallet-modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="wallet-options">
+                    <div class="wallet-option" data-wallet="metamask">
+                        <div class="wallet-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <rect width="32" height="32" rx="6" fill="#F6851B"/>
+                                <path d="M24.5 8L16 14L7.5 8L16 2L24.5 8Z" fill="white"/>
+                                <path d="M7.5 8L16 14V26L7.5 20V8Z" fill="white" opacity="0.8"/>
+                                <path d="M24.5 8L16 14V26L24.5 20V8Z" fill="white" opacity="0.6"/>
+                            </svg>
+                        </div>
+                        <div class="wallet-info">
+                            <h4>MetaMask</h4>
+                            <p>最流行的以太坊钱包</p>
+                        </div>
+                        <div class="wallet-arrow">→</div>
+                    </div>
+                    <div class="wallet-option" data-wallet="okx">
+                        <div class="wallet-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <rect width="32" height="32" rx="6" fill="#000000"/>
+                                <path d="M16 8L20 12L16 16L12 12L16 8Z" fill="white"/>
+                                <path d="M20 12L24 16L20 20L16 16L20 12Z" fill="white" opacity="0.8"/>
+                                <path d="M12 12L16 16L12 20L8 16L12 12Z" fill="white" opacity="0.6"/>
+                            </svg>
+                        </div>
+                        <div class="wallet-info">
+                            <h4>OKX Wallet</h4>
+                            <p>OKX官方钱包</p>
+                        </div>
+                        <div class="wallet-arrow">→</div>
+                    </div>
+                    <div class="wallet-option" data-wallet="binance">
+                        <div class="wallet-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <rect width="32" height="32" rx="6" fill="#F3BA2F"/>
+                                <path d="M16 6L20 10L16 14L12 10L16 6Z" fill="white"/>
+                                <path d="M20 10L24 14L20 18L16 14L20 10Z" fill="white" opacity="0.8"/>
+                                <path d="M12 10L16 14L12 18L8 14L12 10Z" fill="white" opacity="0.6"/>
+                                <path d="M16 14L20 18L16 22L12 18L16 14Z" fill="white" opacity="0.4"/>
+                            </svg>
+                        </div>
+                        <div class="wallet-info">
+                            <h4>币安钱包</h4>
+                            <p>支持二维码登录</p>
+                        </div>
+                        <div class="wallet-arrow">→</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Binance QR Code Modal -->
+    <div class="modal" id="binance-qr-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>币安钱包二维码登录</h3>
+                <button class="modal-close" id="binance-qr-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="qr-container">
+                    <div id="binance-qr-code"></div>
+                    <p class="qr-instruction">使用币安钱包App扫描二维码连接</p>
+                    <div class="qr-status" id="qr-status">等待扫描...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="qr-cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Transaction Modal -->
     <div class="modal" id="tx-modal" style="display: none;">
         <div class="modal-content">
@@ -179,6 +259,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://unpkg.com/@okexchain/web3@latest/dist/web3.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

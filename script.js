@@ -35,7 +35,8 @@ const CONFIG = {
 let userState = {
     account: null,
     balances: {},
-    connected: false
+    connected: false,
+    walletType: null // 'metamask', 'okx', 'binance'
 };
 
 // Swap State
@@ -74,7 +75,18 @@ const elements = {
     swapReverseBtn: document.getElementById('swap-reverse-btn'),
     maxFromBtn: document.getElementById('max-from-btn'),
     
-    // Modal
+    // Wallet Modal
+    walletModal: document.getElementById('wallet-modal'),
+    walletModalClose: document.getElementById('wallet-modal-close'),
+    
+    // Binance QR Modal
+    binanceQrModal: document.getElementById('binance-qr-modal'),
+    binanceQrClose: document.getElementById('binance-qr-close'),
+    binanceQrCode: document.getElementById('binance-qr-code'),
+    qrStatus: document.getElementById('qr-status'),
+    qrCancel: document.getElementById('qr-cancel'),
+    
+    // Transaction Modal
     txModal: document.getElementById('tx-modal'),
     modalClose: document.getElementById('modal-close'),
     modalCancel: document.getElementById('modal-cancel'),
@@ -165,7 +177,7 @@ function setupEventListeners() {
     
     // Wallet connection
     if (elements.connectWalletBtn) {
-        elements.connectWalletBtn.addEventListener('click', connectWallet);
+        elements.connectWalletBtn.addEventListener('click', showWalletModal);
     }
     
     // Switch wallet
@@ -198,7 +210,29 @@ function setupEventListeners() {
         elements.maxFromBtn.addEventListener('click', setMaxAmount);
     }
     
-    // Modal
+    // Wallet Modal
+    if (elements.walletModalClose) {
+        elements.walletModalClose.addEventListener('click', hideWalletModal);
+    }
+    
+    // Wallet Options
+    const walletOptions = document.querySelectorAll('.wallet-option');
+    walletOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const walletType = option.dataset.wallet;
+            handleWalletSelection(walletType);
+        });
+    });
+    
+    // Binance QR Modal
+    if (elements.binanceQrClose) {
+        elements.binanceQrClose.addEventListener('click', hideBinanceQrModal);
+    }
+    if (elements.qrCancel) {
+        elements.qrCancel.addEventListener('click', hideBinanceQrModal);
+    }
+    
+    // Transaction Modal
     if (elements.modalClose) {
         elements.modalClose.addEventListener('click', hideModal);
     }
@@ -428,6 +462,7 @@ async function disconnectWallet() {
     userState.account = null;
     userState.connected = false;
     userState.balances = {};
+    userState.walletType = null;
     signer = null;
     
     // Clear swap inputs
@@ -792,7 +827,10 @@ function updateUI() {
             elements.walletInfo.style.display = 'flex';
         }
         if (elements.walletAddress) {
-            elements.walletAddress.textContent = `${userState.account.slice(0, 6)}...${userState.account.slice(-4)}`;
+            const walletName = userState.walletType === 'metamask' ? 'MetaMask' : 
+                              userState.walletType === 'okx' ? 'OKX' : 
+                              userState.walletType === 'binance' ? '币安' : '钱包';
+            elements.walletAddress.textContent = `${walletName}: ${userState.account.slice(0, 6)}...${userState.account.slice(-4)}`;
         }
         const ethBalance = userState.balances.ETH || 0;
         if (elements.walletBalance) {
@@ -834,6 +872,313 @@ function showNotification(message, type = 'success') {
     setTimeout(() => {
         elements.notification.classList.remove('show');
     }, 3000);
+}
+
+// Show Wallet Selection Modal
+function showWalletModal() {
+    if (elements.walletModal) {
+        elements.walletModal.style.display = 'flex';
+    }
+}
+
+// Hide Wallet Selection Modal
+function hideWalletModal() {
+    if (elements.walletModal) {
+        elements.walletModal.style.display = 'none';
+    }
+}
+
+// Handle Wallet Selection
+async function handleWalletSelection(walletType) {
+    hideWalletModal();
+    
+    switch(walletType) {
+        case 'metamask':
+            await connectMetaMask();
+            break;
+        case 'okx':
+            await connectOKX();
+            break;
+        case 'binance':
+            await connectBinance();
+            break;
+        default:
+            showNotification('未知的钱包类型', 'error');
+    }
+}
+
+// Connect MetaMask
+async function connectMetaMask() {
+    try {
+        if (typeof window.ethereum === 'undefined' || !window.ethereum.isMetaMask) {
+            showNotification('请安装MetaMask钱包', 'error');
+            window.open('https://metamask.io/download/', '_blank');
+            return;
+        }
+        
+        showLoading('连接MetaMask中...');
+        
+        // Step 1: Check and revoke existing permissions
+        try {
+            const permissions = await window.ethereum.request({
+                method: 'wallet_getPermissions'
+            });
+            
+            if (permissions && permissions.length > 0) {
+                for (const permission of permissions) {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_revokePermissions',
+                            params: [permission]
+                        });
+                    } catch (revokeError) {
+                        console.log('Could not revoke permission:', revokeError);
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        } catch (permCheckError) {
+            console.log('Permission check failed:', permCheckError);
+        }
+        
+        // Step 2: Request new permissions
+        try {
+            await window.ethereum.request({
+                method: 'wallet_requestPermissions',
+                params: [{ eth_accounts: {} }]
+            });
+        } catch (permError) {
+            if (permError.code === 4001) {
+                hideLoading();
+                showNotification('用户取消了连接', 'warning');
+                return;
+            }
+        }
+        
+        // Step 3: Get accounts
+        const accounts = await window.ethereum.request({ 
+            method: 'eth_requestAccounts' 
+        });
+        
+        if (accounts.length === 0) {
+            throw new Error('未选择账户');
+        }
+        
+        userState.account = accounts[0];
+        userState.walletType = 'metamask';
+        
+        if (typeof ethers !== 'undefined') {
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            signer = provider.getSigner();
+            await updateUserBalances();
+        }
+        
+        userState.connected = true;
+        updateUI();
+        
+        hideLoading();
+        showNotification('MetaMask连接成功', 'success');
+    } catch (error) {
+        hideLoading();
+        if (error.code === 4001) {
+            showNotification('用户取消了连接', 'warning');
+        } else {
+            showNotification('连接MetaMask失败: ' + error.message, 'error');
+        }
+        console.error('MetaMask connection error:', error);
+    }
+}
+
+// Connect OKX Wallet
+async function connectOKX() {
+    try {
+        if (typeof window.okxwallet === 'undefined') {
+            showNotification('请安装OKX钱包', 'error');
+            window.open('https://www.okx.com/web3', '_blank');
+            return;
+        }
+        
+        showLoading('连接OKX钱包中...');
+        
+        const accounts = await window.okxwallet.request({ 
+            method: 'eth_requestAccounts' 
+        });
+        
+        if (accounts.length === 0) {
+            throw new Error('未选择账户');
+        }
+        
+        userState.account = accounts[0];
+        userState.walletType = 'okx';
+        
+        if (typeof ethers !== 'undefined') {
+            provider = new ethers.providers.Web3Provider(window.okxwallet);
+            signer = provider.getSigner();
+            await updateUserBalances();
+        }
+        
+        userState.connected = true;
+        updateUI();
+        
+        hideLoading();
+        showNotification('OKX钱包连接成功', 'success');
+    } catch (error) {
+        hideLoading();
+        if (error.code === 4001) {
+            showNotification('用户取消了连接', 'warning');
+        } else {
+            showNotification('连接OKX钱包失败: ' + error.message, 'error');
+        }
+        console.error('OKX connection error:', error);
+    }
+}
+
+// Connect Binance Wallet (with QR code)
+async function connectBinance() {
+    try {
+        if (typeof window.BinanceChain === 'undefined') {
+            // Show QR code modal for mobile wallet
+            showBinanceQrModal();
+            return;
+        }
+        
+        // Desktop extension
+        showLoading('连接币安钱包中...');
+        
+        const accounts = await window.BinanceChain.request({ 
+            method: 'eth_requestAccounts' 
+        });
+        
+        if (accounts.length === 0) {
+            throw new Error('未选择账户');
+        }
+        
+        userState.account = accounts[0];
+        userState.walletType = 'binance';
+        
+        if (typeof ethers !== 'undefined') {
+            provider = new ethers.providers.Web3Provider(window.BinanceChain);
+            signer = provider.getSigner();
+            await updateUserBalances();
+        }
+        
+        userState.connected = true;
+        updateUI();
+        
+        hideLoading();
+        showNotification('币安钱包连接成功', 'success');
+    } catch (error) {
+        hideLoading();
+        if (error.code === 4001) {
+            showNotification('用户取消了连接', 'warning');
+        } else {
+            showNotification('连接币安钱包失败: ' + error.message, 'error');
+        }
+        console.error('Binance connection error:', error);
+    }
+}
+
+// Show Binance QR Code Modal
+async function showBinanceQrModal() {
+    if (!elements.binanceQrModal) return;
+    
+    elements.binanceQrModal.style.display = 'flex';
+    if (elements.qrStatus) {
+        elements.qrStatus.textContent = '等待扫描...';
+        elements.qrStatus.className = 'qr-status';
+    }
+    
+    try {
+        // Generate connection URI for WalletConnect or similar
+        // For Binance Wallet, we'll use a connection string
+        const connectionUri = `bsc:${Date.now()}`;
+        
+        // Generate QR code
+        if (typeof QRCode !== 'undefined' && elements.binanceQrCode) {
+            elements.binanceQrCode.innerHTML = '';
+            QRCode.toCanvas(elements.binanceQrCode, connectionUri, {
+                width: 256,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            }, (error) => {
+                if (error) {
+                    console.error('QR code generation error:', error);
+                    if (elements.binanceQrCode) {
+                        elements.binanceQrCode.innerHTML = '<p style="color: var(--text-secondary);">二维码生成失败</p>';
+                    }
+                }
+            });
+        } else {
+            if (elements.binanceQrCode) {
+                elements.binanceQrCode.innerHTML = '<p style="color: var(--text-secondary);">请使用币安钱包App扫描连接</p>';
+            }
+        }
+        
+        // Poll for connection (simplified - in production use WalletConnect)
+        pollBinanceConnection();
+    } catch (error) {
+        console.error('Error showing QR code:', error);
+        showNotification('显示二维码失败', 'error');
+    }
+}
+
+// Hide Binance QR Modal
+function hideBinanceQrModal() {
+    if (elements.binanceQrModal) {
+        elements.binanceQrModal.style.display = 'none';
+    }
+}
+
+// Poll for Binance connection
+function pollBinanceConnection() {
+    let attempts = 0;
+    const maxAttempts = 60; // 30 seconds
+    
+    const pollInterval = setInterval(async () => {
+        attempts++;
+        
+        if (attempts > maxAttempts) {
+            clearInterval(pollInterval);
+            if (elements.qrStatus) {
+                elements.qrStatus.textContent = '连接超时，请重试';
+                elements.qrStatus.className = 'qr-status error';
+            }
+            return;
+        }
+        
+        // Check if Binance wallet is now available
+        if (typeof window.BinanceChain !== 'undefined') {
+            try {
+                const accounts = await window.BinanceChain.request({ 
+                    method: 'eth_accounts' 
+                });
+                
+                if (accounts.length > 0) {
+                    clearInterval(pollInterval);
+                    
+                    userState.account = accounts[0];
+                    userState.walletType = 'binance';
+                    
+                    if (typeof ethers !== 'undefined') {
+                        provider = new ethers.providers.Web3Provider(window.BinanceChain);
+                        signer = provider.getSigner();
+                        await updateUserBalances();
+                    }
+                    
+                    userState.connected = true;
+                    updateUI();
+                    
+                    hideBinanceQrModal();
+                    showNotification('币安钱包连接成功', 'success');
+                }
+            } catch (error) {
+                console.log('Polling error:', error);
+            }
+        }
+    }, 500);
 }
 
 // Auto-update balances
