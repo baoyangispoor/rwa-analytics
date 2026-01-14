@@ -864,7 +864,7 @@ async function loadResearchDataFromFile() {
     if (tbody) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="loading-row">
+                <td colspan="6" class="loading-row">
                     <div class="loading-spinner"></div>
                     <span>正在从文件加载研究数据...</span>
                 </td>
@@ -1076,7 +1076,7 @@ function filterResearchData(category) {
     if (filteredData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="loading-row">
+                <td colspan="6" class="loading-row">
                     <span>该分类下暂无数据</span>
                 </td>
             </tr>
