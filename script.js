@@ -947,7 +947,7 @@ function filterResearchData(category) {
     });
 }
 
-// 显示项目详情
+// 显示项目详情 - 显示所有详细信息
 function showProjectDetails(item, category = 'RWA') {
     if (!item) {
         console.error('项目数据为空');
@@ -990,40 +990,28 @@ function showProjectDetails(item, category = 'RWA') {
         return escapeHtml(text || urlStr);
     };
     
-    // 核心必填字段（按照用户要求）
-    const coreFields = [
-        '项目名称', '发行方 / 平台', '发行时间', '发行地区 / 监管框架（SPV）',
-        '底层资产地区', '行业', '资产形态', '权利类型', 'Token 类型',
-        '募资金额', '融资币种', '交易所 / 承销', '资产规模（USD）'
+    // 获取所有字段（按字母顺序排序，但重要字段优先）
+    const priorityFields = [
+        '项目名称', '标的简称', '发行方 / 平台', '公司主体', '发行时间', 
+        '发行地区 / 监管框架（SPV）', '底层资产地区', '行业', '行业赛道', 
+        '资产形态', '权利类型', 'Token 类型', '募资金额', '融资币种', 
+        '交易所 / 承销', '资产规模（USD）', '金库规模（USD）', '金额'
     ];
     
-    // 其他重要字段
-    const additionalFields = [
-        '标的简称', '公司主体', '行业赛道', '项目状态', '当前状态',
-        '资产类型', '资产说明', '现金流特征', '托管 / 审计方', 
-        '托管', '托管机构', '审计方', 'Token 名称 / 符号',
-        '经济属性', '投资/消费属性', '收益分配方式', '年化收益率（APY）',
-        '币链评分（0-100）', '投资逻辑摘要', '风险点', '复盘结论',
-        '链上地址', '可视化仪表盘', '法律文件', '标签', '一句话简介',
-        '交易时间', '轮次', '金额', '投资方', '金库规模（USD）',
-        '公链 / 合约标准', '辖区（上市/运营）', 'DAT目标', '合规路径'
-    ];
+    // 获取所有字段名（排除已列出的优先字段）
+    const allFields = Object.keys(item);
+    const otherFields = allFields.filter(field => !priorityFields.includes(field));
     
-    // 合并所有字段，核心字段在前
-    const allFields = [...coreFields];
-    additionalFields.forEach(field => {
-        if (!allFields.includes(field)) {
-            allFields.push(field);
-        }
-    });
+    // 合并字段列表：优先字段在前，其他字段按字母顺序
+    const sortedFields = [...priorityFields, ...otherFields.sort()];
     
     let html = '<div class="detail-grid">';
+    html += '<div class="detail-section"><h3 style="color: var(--accent-cyan); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">详情信息</h3></div>';
     
-    // 先显示核心字段
-    html += '<div class="detail-section"><h3 style="color: var(--accent-cyan); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">核心信息</h3></div>';
-    
-    coreFields.forEach(field => {
+    // 显示所有有值的字段
+    sortedFields.forEach(field => {
         let value = item[field] || '';
+        
         // 对于DAPE类别，特殊处理字段映射
         if (category === 'DAPE' && field === '项目名称' && !value) {
             value = item['标的简称'] || '';
@@ -1035,22 +1023,7 @@ function showProjectDetails(item, category = 'RWA') {
             value = item['行业赛道'] || '';
         }
         
-        if (value && value !== 'N/A' && value !== '' && String(value).trim() !== '') {
-            value = escapeHtml(value.toString());
-            html += `
-                <div class="detail-item">
-                    <div class="detail-label">${escapeHtml(field)}</div>
-                    <div class="detail-value">${value}</div>
-                </div>
-            `;
-        }
-    });
-    
-    // 再显示其他字段
-    html += '<div class="detail-section" style="margin-top: 2rem;"><h3 style="color: var(--accent-cyan); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">其他信息</h3></div>';
-    
-    additionalFields.forEach(field => {
-        let value = item[field] || '';
+        // 只显示有值的字段
         if (value && value !== 'N/A' && value !== '' && String(value).trim() !== '') {
             // 特殊处理链接字段
             if (field === '可视化仪表盘' || field === '链上地址' || field === '法律文件' || field === '项目链接' || field === '白皮书') {
