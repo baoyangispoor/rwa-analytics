@@ -56,6 +56,8 @@ const elements = {
     walletInfo: document.getElementById('wallet-info'),
     walletAddress: document.getElementById('wallet-address'),
     walletBalance: document.getElementById('wallet-balance'),
+    switchWalletBtn: document.getElementById('switch-wallet-btn'),
+    disconnectWalletBtn: document.getElementById('disconnect-wallet-btn'),
     
     // Swap
     swapFromAmount: document.getElementById('swap-from-amount'),
@@ -164,6 +166,16 @@ function setupEventListeners() {
     // Wallet connection
     if (elements.connectWalletBtn) {
         elements.connectWalletBtn.addEventListener('click', connectWallet);
+    }
+    
+    // Switch wallet
+    if (elements.switchWalletBtn) {
+        elements.switchWalletBtn.addEventListener('click', switchWallet);
+    }
+    
+    // Disconnect wallet
+    if (elements.disconnectWalletBtn) {
+        elements.disconnectWalletBtn.addEventListener('click', disconnectWallet);
     }
     
     // Swap
@@ -288,11 +300,81 @@ async function connectWallet() {
     }
 }
 
+// Switch Wallet
+async function switchWallet() {
+    if (!userState.connected) {
+        showNotification('请先连接钱包', 'error');
+        return;
+    }
+    
+    try {
+        showLoading('切换钱包中...');
+        
+        // Request account switch
+        if (typeof window.ethereum !== 'undefined') {
+            // Request to switch accounts
+            await window.ethereum.request({
+                method: 'wallet_requestPermissions',
+                params: [{ eth_accounts: {} }]
+            });
+            
+            // Get new accounts
+            const accounts = await window.ethereum.request({ 
+                method: 'eth_requestAccounts' 
+            });
+            
+            if (accounts.length > 0) {
+                const oldAccount = userState.account;
+                userState.account = accounts[0];
+                
+                if (typeof ethers !== 'undefined' && provider) {
+                    signer = provider.getSigner();
+                    await updateUserBalances();
+                }
+                
+                updateUI();
+                hideLoading();
+                showNotification(`钱包已切换: ${oldAccount.slice(0, 6)}... → ${userState.account.slice(0, 6)}...`, 'success');
+            } else {
+                hideLoading();
+                showNotification('未选择新账户', 'warning');
+            }
+        } else {
+            hideLoading();
+            showNotification('请安装MetaMask', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        if (error.code === 4001) {
+            showNotification('用户取消了切换', 'warning');
+        } else {
+            showNotification('切换钱包失败: ' + error.message, 'error');
+        }
+        console.error('Switch wallet error:', error);
+    }
+}
+
 // Disconnect Wallet
 function disconnectWallet() {
+    if (!userState.connected) {
+        return;
+    }
+    
+    const confirmed = confirm('确定要断开钱包连接吗？');
+    if (!confirmed) {
+        return;
+    }
+    
     userState.account = null;
     userState.connected = false;
     userState.balances = {};
+    signer = null;
+    
+    // Clear swap inputs
+    if (elements.swapFromAmount) elements.swapFromAmount.value = '';
+    if (elements.swapToAmount) elements.swapToAmount.value = '';
+    resetSwapInfo();
+    
     updateUI();
     showNotification('钱包已断开', 'warning');
 }
@@ -618,14 +700,26 @@ function addToTransactionHistory(tx) {
 function updateUI() {
     // Wallet info
     if (userState.connected && userState.account) {
-        elements.connectWalletBtn.style.display = 'none';
-        elements.walletInfo.style.display = 'flex';
-        elements.walletAddress.textContent = `${userState.account.slice(0, 6)}...${userState.account.slice(-4)}`;
+        if (elements.connectWalletBtn) {
+            elements.connectWalletBtn.style.display = 'none';
+        }
+        if (elements.walletInfo) {
+            elements.walletInfo.style.display = 'flex';
+        }
+        if (elements.walletAddress) {
+            elements.walletAddress.textContent = `${userState.account.slice(0, 6)}...${userState.account.slice(-4)}`;
+        }
         const ethBalance = userState.balances.ETH || 0;
-        elements.walletBalance.textContent = `${ethBalance.toFixed(4)} ETH`;
+        if (elements.walletBalance) {
+            elements.walletBalance.textContent = `${ethBalance.toFixed(4)} ETH`;
+        }
     } else {
-        elements.connectWalletBtn.style.display = 'block';
-        elements.walletInfo.style.display = 'none';
+        if (elements.connectWalletBtn) {
+            elements.connectWalletBtn.style.display = 'block';
+        }
+        if (elements.walletInfo) {
+            elements.walletInfo.style.display = 'none';
+        }
     }
     
     // Swap balances
