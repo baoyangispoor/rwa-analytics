@@ -175,14 +175,15 @@ function enableDemoMode() {
 function setupEventListeners() {
     console.log('Setting up event listeners...');
     
-    // Wallet connection
-    if (elements.connectWalletBtn) {
-        // Remove any existing listeners to avoid duplicates
-        const newBtn = elements.connectWalletBtn.cloneNode(true);
-        elements.connectWalletBtn.parentNode.replaceChild(newBtn, elements.connectWalletBtn);
+    // Wallet connection - use direct binding for reliability
+    const connectBtn = document.getElementById('connect-wallet-btn');
+    if (connectBtn) {
+        // Remove all existing listeners by cloning
+        const newBtn = connectBtn.cloneNode(true);
+        connectBtn.parentNode.replaceChild(newBtn, connectBtn);
         elements.connectWalletBtn = newBtn;
         
-        elements.connectWalletBtn.addEventListener('click', (e) => {
+        newBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             console.log('Connect wallet button clicked');
@@ -190,21 +191,23 @@ function setupEventListeners() {
         });
         console.log('Connect wallet button event listener attached');
     } else {
-        console.error('Connect wallet button not found');
-        // Try to find it again after a delay
+        console.error('Connect wallet button not found in DOM');
+        // Try again after DOM is fully loaded
         setTimeout(() => {
             const btn = document.getElementById('connect-wallet-btn');
             if (btn) {
                 elements.connectWalletBtn = btn;
-                btn.addEventListener('click', (e) => {
+                btn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Connect wallet button clicked (delayed)');
                     showWalletModal();
                 });
                 console.log('Connect wallet button found and attached (delayed)');
+            } else {
+                console.error('Connect wallet button still not found after delay');
             }
-        }, 500);
+        }, 1000);
     }
     
     // Switch wallet
@@ -1079,16 +1082,31 @@ function showWalletModal() {
         walletModal = document.getElementById('wallet-modal');
         if (walletModal) {
             elements.walletModal = walletModal;
+            console.log('Wallet modal found and cached');
         }
     }
     
     if (walletModal) {
         walletModal.style.display = 'flex';
         walletModal.style.zIndex = '1000';
+        walletModal.style.position = 'fixed';
+        walletModal.style.top = '0';
+        walletModal.style.left = '0';
+        walletModal.style.width = '100%';
+        walletModal.style.height = '100%';
         console.log('Wallet modal displayed');
     } else {
         console.error('Wallet modal element not found');
-        showNotification('钱包选择界面加载失败，请刷新页面', 'error');
+        // Try to find it one more time
+        const modal = document.getElementById('wallet-modal');
+        if (modal) {
+            elements.walletModal = modal;
+            modal.style.display = 'flex';
+            modal.style.zIndex = '1000';
+            console.log('Wallet modal found on second attempt');
+        } else {
+            showNotification('钱包选择界面加载失败，请刷新页面', 'error');
+        }
     }
 }
 
