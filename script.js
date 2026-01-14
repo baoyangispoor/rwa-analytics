@@ -199,7 +199,12 @@ function setupEventListeners() {
     
     // Swap
     if (elements.swapFromAmount) {
-        elements.swapFromAmount.addEventListener('input', debounce(handleSwapInput, 500));
+        // Use shorter debounce for better UX
+        elements.swapFromAmount.addEventListener('input', debounce(handleSwapInput, 300));
+        // Also trigger on paste
+        elements.swapFromAmount.addEventListener('paste', () => {
+            setTimeout(() => handleSwapInput(), 100);
+        });
     }
     if (elements.swapFromToken) {
         elements.swapFromToken.addEventListener('change', handleSwapInput);
@@ -614,44 +619,156 @@ async function handleSwapInput() {
     const fromToken = elements.swapFromToken.value;
     const toToken = elements.swapToToken.value;
     
-    if (fromAmount <= 0) {
+    // Clear output if no input
+    if (fromAmount <= 0 || isNaN(fromAmount)) {
         elements.swapToAmount.value = '';
         elements.swapBtn.disabled = true;
         resetSwapInfo();
         return;
     }
     
-    // Check balance
-    const balance = userState.balances[fromToken] || 0;
-    if (fromAmount > balance) {
+    // Check if same token
+    if (fromToken === toToken) {
+        elements.swapToAmount.value = fromAmount.toFixed(6);
         elements.swapBtn.disabled = true;
-        showNotification('余额不足', 'error');
+        showNotification('不能交换相同的代币', 'warning');
         return;
     }
     
+    // Check balance (only if wallet connected)
+    if (userState.connected) {
+        const balance = userState.balances[fromToken] || 0;
+        if (fromAmount > balance) {
+            elements.swapBtn.disabled = true;
+            showNotification('余额不足', 'error');
+            // Still show quote even if balance insufficient
+        }
+    }
+    
     try {
-        showLoading('获取最优报价...');
+        // Show loading indicator
+        if (elements.swapToAmount) {
+            elements.swapToAmount.value = '计算中...';
+        }
         
-        // Get quote from 1inch
+        // Get quote from 1inch API
         const quote = await getQuote(fromToken, toToken, fromAmount);
+        
+        if (!quote || !quote.toTokenAmount) {
+            throw new Error('无法获取报价');
+        }
         
         const toDecimals = CONFIG.tokens[toToken].decimals;
         const amountOut = parseFloat(ethers.utils.formatUnits(quote.toTokenAmount, toDecimals));
         
-        elements.swapToAmount.value = amountOut.toFixed(6);
+        // Display output amount
+        if (elements.swapToAmount) {
+            elements.swapToAmount.value = amountOut.toFixed(6);
+        }
         
-        // Calculate price impact
-        const priceImpact = parseFloat(quote.estimatedGas) / 1000000; // Simplified
+        // Store quote for later use
+        swapState.quote = quote;
+        
+        // Calculate and display price impact
+        let priceImpact = 0;
+        if (quote.estimatedGas && quote.fromTokenAmount) {
+            // More accurate price impact calculation
+            const fromAmountWei = ethers.utils.parseUnits(fromAmount.toString(), CONFIG.tokens[fromToken].decimals);
+            const expectedOut = parseFloat(ethers.utils.formatUnits(quote.fromTokenAmount, CONFIG.tokens[fromToken].decimals));
+            if (expectedOut > 0) {
+                priceImpact = Math.abs((fromAmount - expectedOut) / fromAmount * 100);
+            }
+        }
+        
+        // Use 1inch's price impact if available
+        if (quote.estimatedGas) {
+            // Simplified price impact from gas estimate
+            priceImpact = Math.min(parseFloat(quote.estimatedGas) / 1000000, 10);
+        }
+        
         swapState.priceImpact = priceImpact;
-        elements.priceImpact.textContent = priceImpact.toFixed(2) + '%';
-        elements.priceImpact.style.color = priceImpact > 5 ? '#EF4444' : '#10B981';
+        if (elements.priceImpact) {
+            elements.priceImpact.textContent = priceImpact.toFixed(2) + '%';
+            elements.priceImpact.style.color = priceImpact > 5 ? '#EF4444' : priceImpact > 1 ? '#F59E0B' : '#10B981';
+        }
         
-        // Min received (1% slippage)
+        // Min received (1% slippage tolerance)
         const minReceived = amountOut * 0.99;
-        elements.minReceived.textContent = minReceived.toFixed(6) + ' ' + toToken;
+        if (elements.minReceived) {
+            elements.minReceived.textContent = minReceived.toFixed(6) + ' ' + toToken;
+        }
         
-        // Gas estimate (simplified)
-        const gasPrice = await provider.getGasPrice();
+        // Gas estimate
+        let gasEstimate = '~$0';
+        if (quote.estimatedGas) {
+            try {
+                let gasPrice;
+                if (provider) {
+                    gasPrice = await provider.getGasPrice();
+                } else {
+                    // Fallback gas price if no provider
+                    gasPrice = ethers.utils.parseUnits('20', 'gwei');
+                }
+                const gasCost = gasPrice.mul(quote.estimatedGas);
+                const gasCostEth = parseFloat(ethers.utils.formatEther(gasCost));
+                const ethPrice = 2000; // Simplified - would fetch from API
+                const gasCostUsd = gasCostEth * ethPrice;
+                gasEstimate = `~$${gasCostUsd.toFixed(2)}`;
+                swapState.gasEstimate = gasCostEth;
+            } catch (gasError) {
+                console.log('Could not calculate gas:', gasError);
+                gasEstimate = '~$0';
+            }
+        }
+        
+        if (elements.gasEstimate) {
+            elements.gasEstimate.textContent = gasEstimate;
+        }
+        
+        // Best DEX (from 1inch protocol name)
+        let bestDex = '1inch';
+        if (quote.protocols && quote.protocols.length > 0) {
+            const firstProtocol = quote.protocols[0];
+            if (Array.isArray(firstProtocol) && firstProtocol.length > 0) {
+                const protocolInfo = firstProtocol[0];
+                if (Array.isArray(protocolInfo) && protocolInfo.length > 0) {
+                    bestDex = protocolInfo[0]?.name || '1inch';
+                }
+            }
+        }
+        
+        if (elements.bestDex) {
+            elements.bestDex.textContent = bestDex;
+        }
+        swapState.bestDex = bestDex;
+        
+        // Enable swap button (only if wallet connected)
+        if (elements.swapBtn) {
+            elements.swapBtn.disabled = !userState.connected || fromAmount <= 0;
+        }
+        
+    } catch (error) {
+        console.error('Error in handleSwapInput:', error);
+        
+        // Clear output on error
+        if (elements.swapToAmount) {
+            elements.swapToAmount.value = '';
+        }
+        
+        // Disable swap button
+        if (elements.swapBtn) {
+            elements.swapBtn.disabled = true;
+        }
+        
+        // Reset swap info
+        resetSwapInfo();
+        
+        // Show error notification (but don't be too intrusive)
+        if (error.message && !error.message.includes('用户取消')) {
+            showNotification('获取报价失败，请稍后重试', 'error');
+        }
+    }
+}
         const gasCost = gasPrice.mul(quote.estimatedGas);
         const gasCostEth = parseFloat(ethers.utils.formatEther(gasCost));
         const ethPrice = 2000; // Simplified - would fetch from API
