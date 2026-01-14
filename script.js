@@ -177,7 +177,14 @@ function setupEventListeners() {
     
     // Wallet connection
     if (elements.connectWalletBtn) {
-        elements.connectWalletBtn.addEventListener('click', showWalletModal);
+        elements.connectWalletBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Connect wallet button clicked');
+            showWalletModal();
+        });
+    } else {
+        console.error('Connect wallet button not found');
     }
     
     // Switch wallet
@@ -215,14 +222,47 @@ function setupEventListeners() {
         elements.walletModalClose.addEventListener('click', hideWalletModal);
     }
     
-    // Wallet Options
-    const walletOptions = document.querySelectorAll('.wallet-option');
-    walletOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            const walletType = option.dataset.wallet;
-            handleWalletSelection(walletType);
+    // Wallet Options - Use event delegation for better reliability
+    if (elements.walletModal) {
+        const walletModalBody = elements.walletModal.querySelector('.modal-body');
+        if (walletModalBody) {
+            walletModalBody.addEventListener('click', (e) => {
+                const walletOption = e.target.closest('.wallet-option');
+                if (walletOption) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const walletType = walletOption.dataset.wallet;
+                    if (walletType) {
+                        console.log('Wallet option clicked:', walletType);
+                        handleWalletSelection(walletType);
+                    }
+                }
+            });
+        }
+        
+        // Close modal when clicking background
+        elements.walletModal.addEventListener('click', (e) => {
+            if (e.target === elements.walletModal) {
+                hideWalletModal();
+            }
         });
-    });
+    }
+    
+    // Fallback: bind directly to options after a short delay
+    setTimeout(() => {
+        const walletOptions = document.querySelectorAll('.wallet-option');
+        walletOptions.forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const walletType = option.dataset.wallet;
+                if (walletType) {
+                    console.log('Wallet option clicked (direct):', walletType);
+                    handleWalletSelection(walletType);
+                }
+            });
+        });
+    }, 300);
     
     // Binance QR Modal
     if (elements.binanceQrClose) {
@@ -876,8 +916,14 @@ function showNotification(message, type = 'success') {
 
 // Show Wallet Selection Modal
 function showWalletModal() {
+    console.log('showWalletModal called');
     if (elements.walletModal) {
         elements.walletModal.style.display = 'flex';
+        console.log('Wallet modal displayed');
+        // Ensure modal is on top
+        elements.walletModal.style.zIndex = '1000';
+    } else {
+        console.error('Wallet modal element not found');
     }
 }
 
@@ -890,7 +936,13 @@ function hideWalletModal() {
 
 // Handle Wallet Selection
 async function handleWalletSelection(walletType) {
+    console.log('handleWalletSelection called with:', walletType);
     hideWalletModal();
+    
+    if (!walletType) {
+        showNotification('未选择钱包类型', 'error');
+        return;
+    }
     
     switch(walletType) {
         case 'metamask':
@@ -903,7 +955,7 @@ async function handleWalletSelection(walletType) {
             await connectBinance();
             break;
         default:
-            showNotification('未知的钱包类型', 'error');
+            showNotification('未知的钱包类型: ' + walletType, 'error');
     }
 }
 
