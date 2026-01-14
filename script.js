@@ -383,44 +383,51 @@ function getCategoryLabel(category) {
 
 // 创建表格行
 function createTableRow(project, priceData, marketData, rank) {
-    const price = priceData?.usd || 0;
-    const change24h = priceData?.usd_24h_change || 0;
-    const marketCap = marketData?.market_cap?.usd || 0;
+    const price = priceData?.usd || null;
+    const change24h = priceData?.usd_24h_change !== undefined && priceData?.usd_24h_change !== null ? priceData.usd_24h_change : null;
+    const marketCap = marketData?.market_cap?.usd || null;
     
     const row = document.createElement('tr');
     row.dataset.category = project.category || 'other';
     row.style.cursor = 'pointer';
     
-    const changeClass = change24h > 0 ? 'positive' : change24h < 0 ? 'negative' : '';
+    const changeClass = change24h !== null ? (change24h > 0 ? 'positive' : change24h < 0 ? 'negative' : '') : '';
+    
+    // 格式化价格显示
+    const priceDisplay = price !== null ? formatPrice(price) : 'N/A';
+    const changeDisplay = change24h !== null ? `${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%` : 'N/A';
+    const marketCapDisplay = marketCap !== null ? formatMarketCap(marketCap) : 'N/A';
     
     row.innerHTML = `
         <td class="col-rank">${rank}</td>
         <td class="col-name">
             <div class="project-name">
-                <div class="project-logo">${project.symbol.charAt(0)}</div>
+                <div class="project-logo">${(project.symbol || project.name).charAt(0).toUpperCase()}</div>
                 <div class="project-info">
-                    <div class="project-title">${project.name}</div>
-                    <div class="project-symbol">${project.symbol}</div>
+                    <div class="project-title">${project.name || 'N/A'}</div>
+                    <div class="project-symbol">${project.symbol || ''}</div>
                 </div>
             </div>
         </td>
         <td class="col-category">
             <span class="category-badge">${getCategoryLabel(project.category)}</span>
         </td>
-        <td class="col-price">${formatPrice(price)}</td>
+        <td class="col-price">${priceDisplay}</td>
         <td class="col-change">
             <div class="change-cell">
                 <span class="change-value ${changeClass}">
-                    ${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%
+                    ${changeDisplay}
                 </span>
             </div>
         </td>
-        <td class="col-marketcap">${formatMarketCap(marketCap)}</td>
+        <td class="col-marketcap">${marketCapDisplay}</td>
     `;
     
     // 添加点击事件
     row.addEventListener('click', () => {
-        window.open(`https://www.coingecko.com/en/coins/${project.id}`, '_blank');
+        if (project.id) {
+            window.open(`https://www.coingecko.com/en/coins/${project.id}`, '_blank');
+        }
     });
     
     return row;
@@ -531,29 +538,9 @@ async function fetchRWAProjects() {
             </tr>
         `;
 
-        // 获取所有RWA项目的ID列表
-        const rwaIds = RWA_PROJECTS.map(p => p.id).join(',');
-
-        // 获取价格数据
-        const priceParams = new URLSearchParams({
-            ids: rwaIds,
-            vs_currencies: VS_CURRENCY,
-            include_24hr_change: 'true'
-        });
-
-        // 获取市场数据（包括市值）
-        const marketParams = new URLSearchParams({
-            ids: rwaIds,
-            vs_currency: VS_CURRENCY,
-            order: 'market_cap_desc',
-            per_page: RWA_PROJECTS.length,
-            page: 1,
-            sparkline: false
-        });
-
         // 检查缓存
         const now = Date.now();
-        if (rwaCache.data && (now - rwaCache.timestamp) < CACHE_DURATION) {
+        if (rwaCache.data && (now - rwaCache.timestamp) < CACHE_DURATION * 5) { // 缓存延长到5分钟
             console.log('使用缓存的RWA数据');
             const cachedData = rwaCache.data;
             rwaProjectsData = cachedData.projects;
@@ -562,11 +549,11 @@ async function fetchRWAProjects() {
         }
 
         // 带重试的请求函数
-        const fetchWithRetry = async (url, options, retries = MAX_RETRIES) => {
+        const fetchWithRetry = async (url, options, retries = 2) => { // 减少重试次数避免长时间等待
             for (let i = 0; i < retries; i++) {
                 try {
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25秒超时
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 缩短超时时间到15秒
                     
                     const response = await fetch(url, {
                         ...options,
@@ -587,109 +574,196 @@ async function fetchRWAProjects() {
                 }
             }
         };
-        
-        const [priceResponse, marketResponse] = await Promise.all([
-            fetchWithRetry(`${API_URL}?${priceParams}`, {
-                headers: { 'Accept': 'application/json' }
-            }),
-            fetchWithRetry(`${COINGECKO_API}/coins/markets?${marketParams}`, {
-                headers: { 'Accept': 'application/json' }
-            })
-        ]);
 
-        if (!priceResponse.ok || !marketResponse.ok) {
-            throw new Error('获取RWA数据失败');
-        }
-
-        const priceData = await priceResponse.json();
-        const marketData = await marketResponse.json();
-
-        // 创建市场数据映射
-        const marketMap = {};
-        marketData.forEach(coin => {
-            marketMap[coin.id] = coin;
-        });
-
-        // 存储所有项目数据
+        // 存储所有项目数据（先使用基本信息）
         rwaProjectsData = [];
 
-        // 为每个项目收集数据
+        // 先创建基本项目列表（不依赖API）
         RWA_PROJECTS.forEach(project => {
-            const priceInfo = priceData[project.id];
-            const marketInfo = marketMap[project.id];
+            rwaProjectsData.push({
+                project: project,
+                priceData: {
+                    usd: null,
+                    usd_24h_change: null
+                },
+                marketData: null
+            });
+        });
 
-            if (priceInfo) {
+        // 尝试分批获取API数据，避免请求过大
+        try {
+            // 分批处理，每批最多10个项目
+            const batchSize = 10;
+            const batches = [];
+            for (let i = 0; i < RWA_PROJECTS.length; i += batchSize) {
+                batches.push(RWA_PROJECTS.slice(i, i + batchSize));
+            }
+
+            const allPriceData = {};
+            const allMarketData = [];
+
+            // 逐个批次获取数据
+            for (const batch of batches) {
+                try {
+                    const batchIds = batch.map(p => p.id).join(',');
+                    
+                    // 获取价格数据
+                    const priceParams = new URLSearchParams({
+                        ids: batchIds,
+                        vs_currencies: VS_CURRENCY,
+                        include_24hr_change: 'true'
+                    });
+
+                    // 获取市场数据
+                    const marketParams = new URLSearchParams({
+                        ids: batchIds,
+                        vs_currency: VS_CURRENCY,
+                        order: 'market_cap_desc',
+                        per_page: batch.length,
+                        page: 1,
+                        sparkline: false
+                    });
+
+                    const [priceResponse, marketResponse] = await Promise.allSettled([
+                        fetchWithRetry(`${API_URL}?${priceParams}`, {
+                            headers: { 'Accept': 'application/json' }
+                        }).then(r => r.json()),
+                        fetchWithRetry(`${COINGECKO_API}/coins/markets?${marketParams}`, {
+                            headers: { 'Accept': 'application/json' }
+                        }).then(r => r.json())
+                    ]);
+
+                    if (priceResponse.status === 'fulfilled') {
+                        Object.assign(allPriceData, priceResponse.value);
+                    }
+
+                    if (marketResponse.status === 'fulfilled') {
+                        allMarketData.push(...(Array.isArray(marketResponse.value) ? marketResponse.value : []));
+                    }
+
+                    // 批次间稍作延迟，避免API限流
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (batchError) {
+                    console.warn('批次请求失败，继续处理其他批次:', batchError);
+                }
+            }
+
+            // 创建市场数据映射
+            const marketMap = {};
+            allMarketData.forEach(coin => {
+                marketMap[coin.id] = coin;
+            });
+
+            // 更新项目数据
+            rwaProjectsData = [];
+            RWA_PROJECTS.forEach(project => {
+                const priceInfo = allPriceData[project.id];
+                const marketInfo = marketMap[project.id];
+
                 rwaProjectsData.push({
                     project: project,
-                    priceData: priceInfo,
-                    marketData: marketInfo
+                    priceData: priceInfo || {
+                        usd: null,
+                        usd_24h_change: null
+                    },
+                    marketData: marketInfo || null
                 });
-            }
-        });
-        
-        // 更新缓存
-        rwaCache.data = {
-            projects: rwaProjectsData,
-            priceData: priceData,
-            marketData: marketData
-        };
-        rwaCache.timestamp = Date.now();
+            });
+            
+            // 更新缓存
+            rwaCache.data = {
+                projects: rwaProjectsData,
+                priceData: allPriceData,
+                marketData: allMarketData
+            };
+            rwaCache.timestamp = Date.now();
 
-        // 如果没有数据，显示提示
-        if (rwaProjectsData.length === 0) {
+        } catch (apiError) {
+            console.warn('API请求部分失败，使用基本数据:', apiError);
+            // 即使API失败，也使用基本项目信息
+        }
+
+        // 应用当前筛选
+        if (rwaProjectsData.length > 0) {
+            filterRWAProjects(currentCategory);
+        } else {
             rwaTableBody.innerHTML = `
                 <tr>
                     <td colspan="6" class="loading-row">
-                        <span>暂无RWA项目数据，请稍后重试</span>
+                        <span>暂无RWA项目数据</span>
                     </td>
                 </tr>
             `;
             updateRWAStats([]);
-        } else {
-            // 应用当前筛选
-            filterRWAProjects(currentCategory);
         }
 
     } catch (error) {
         console.error('获取RWA项目失败:', error);
         
         // 如果缓存有数据，使用缓存
-        if (rwaCache.data && rwaCache.data.projects) {
+        if (rwaCache.data && rwaCache.data.projects && rwaCache.data.projects.length > 0) {
             console.log('使用缓存数据作为备用');
             rwaProjectsData = rwaCache.data.projects;
             filterRWAProjects(currentCategory);
             
             // 显示提示
-            const firstRow = rwaTableBody.querySelector('tr');
-            if (firstRow) {
-                const notice = document.createElement('div');
-                notice.style.cssText = 'text-align: center; padding: 10px; color: var(--text-secondary); font-size: 0.85rem;';
-                notice.textContent = '⚠️ 当前显示的是缓存数据，可能不是最新';
-                rwaTableBody.insertBefore(notice, firstRow);
-            }
+            setTimeout(() => {
+                const firstRow = rwaTableBody.querySelector('tr');
+                if (firstRow && !firstRow.querySelector('.cache-notice')) {
+                    const notice = document.createElement('div');
+                    notice.className = 'cache-notice';
+                    notice.style.cssText = 'text-align: center; padding: 10px; color: var(--text-secondary); font-size: 0.85rem; background: var(--bg-secondary); margin-bottom: 10px; border-radius: 6px;';
+                    notice.textContent = '⚠️ 当前显示的是缓存数据，可能不是最新';
+                    rwaTableBody.insertBefore(notice, firstRow);
+                }
+            }, 100);
             return;
         }
         
-        let errorMessage = '无法加载RWA项目信息';
-        if (error.name === 'AbortError') {
-            errorMessage = '请求超时，已自动重试但失败';
-        } else if (error.message.includes('Failed to fetch')) {
-            errorMessage = '网络连接失败，请检查网络设置';
-        } else if (error.message.includes('429')) {
-            errorMessage = 'API请求过于频繁，请稍后再试';
-        }
+        // 如果连缓存都没有，至少显示基本项目列表
+        rwaProjectsData = RWA_PROJECTS.map(project => ({
+            project: project,
+            priceData: {
+                usd: null,
+                usd_24h_change: null
+            },
+            marketData: null
+        }));
         
-        rwaTableBody.innerHTML = `
-            <tr>
-                <td colspan="6" class="loading-row">
-                    <span>${errorMessage}</span>
-                    <br>
-                    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
-                        重新加载
-                    </button>
-                </td>
-            </tr>
-        `;
+        if (rwaProjectsData.length > 0) {
+            filterRWAProjects(currentCategory);
+            setTimeout(() => {
+                const firstRow = rwaTableBody.querySelector('tr');
+                if (firstRow && !firstRow.querySelector('.api-notice')) {
+                    const notice = document.createElement('div');
+                    notice.className = 'api-notice';
+                    notice.style.cssText = 'text-align: center; padding: 10px; color: var(--accent-yellow); font-size: 0.85rem; background: var(--bg-secondary); margin-bottom: 10px; border-radius: 6px;';
+                    notice.innerHTML = '⚠️ 无法获取实时价格数据，显示项目基本信息';
+                    rwaTableBody.insertBefore(notice, firstRow);
+                }
+            }, 100);
+        } else {
+            let errorMessage = '无法加载RWA项目信息';
+            if (error.name === 'AbortError') {
+                errorMessage = '请求超时';
+            } else if (error.message && error.message.includes('Failed to fetch')) {
+                errorMessage = '网络连接失败，已显示基本项目信息';
+            } else if (error.message && error.message.includes('429')) {
+                errorMessage = 'API请求过于频繁，已显示基本项目信息';
+            }
+            
+            rwaTableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="loading-row">
+                        <span>${errorMessage}</span>
+                        <br>
+                        <button onclick="fetchRWAProjects()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-blue); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            重试加载
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
     }
 }
 
