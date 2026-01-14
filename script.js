@@ -1,36 +1,49 @@
-// DEX Configuration
+// DEX Aggregator Configuration
 const CONFIG = {
-    chainId: '0x1', // Ethereum Mainnet (测试时可以使用测试网)
-    rpcUrl: 'https://eth.llamarpc.com', // 公共RPC节点
+    chainId: 1, // Ethereum Mainnet
+    oneInchApiUrl: 'https://api.1inch.io/v5.0/1',
     tokens: {
         ETH: {
             symbol: 'ETH',
             decimals: 18,
-            address: '0x0000000000000000000000000000000000000000' // ETH使用零地址
+            address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' // ETH native token address
         },
         USDT: {
             symbol: 'USDT',
             decimals: 6,
-            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' // USDT主网地址
+            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+        },
+        USDC: {
+            symbol: 'USDC',
+            decimals: 6,
+            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+        },
+        DAI: {
+            symbol: 'DAI',
+            decimals: 18,
+            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+        },
+        WBTC: {
+            symbol: 'WBTC',
+            decimals: 8,
+            address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
         }
     }
-};
-
-// AMM Pool State (模拟智能合约状态)
-let poolState = {
-    reserveETH: 0,
-    reserveUSDT: 0,
-    totalSupply: 0, // LP代币总供应量
-    k: 0 // 恒定乘积 k = x * y
 };
 
 // User State
 let userState = {
     account: null,
-    balanceETH: 0,
-    balanceUSDT: 0,
-    lpBalance: 0,
+    balances: {},
     connected: false
+};
+
+// Swap State
+let swapState = {
+    quote: null,
+    gasEstimate: null,
+    bestDex: null,
+    priceImpact: 0
 };
 
 // Provider and Signer
@@ -44,10 +57,6 @@ const elements = {
     walletAddress: document.getElementById('wallet-address'),
     walletBalance: document.getElementById('wallet-balance'),
     
-    // Tabs
-    tabBtns: document.querySelectorAll('.tab-btn'),
-    tabContents: document.querySelectorAll('.tab-content'),
-    
     // Swap
     swapFromAmount: document.getElementById('swap-from-amount'),
     swapFromToken: document.getElementById('swap-from-token'),
@@ -57,35 +66,27 @@ const elements = {
     swapToBalance: document.getElementById('swap-to-balance'),
     priceImpact: document.getElementById('price-impact'),
     minReceived: document.getElementById('min-received'),
+    gasEstimate: document.getElementById('gas-estimate'),
+    bestDex: document.getElementById('best-dex'),
     swapBtn: document.getElementById('swap-btn'),
     swapReverseBtn: document.getElementById('swap-reverse-btn'),
+    maxFromBtn: document.getElementById('max-from-btn'),
     
-    // Liquidity
-    liquidityEthAmount: document.getElementById('liquidity-eth-amount'),
-    liquidityUsdtAmount: document.getElementById('liquidity-usdt-amount'),
-    liquidityEthBalance: document.getElementById('liquidity-eth-balance'),
-    liquidityUsdtBalance: document.getElementById('liquidity-usdt-balance'),
-    liquidityPrice: document.getElementById('liquidity-price'),
-    liquidityShare: document.getElementById('liquidity-share'),
-    addLiquidityBtn: document.getElementById('add-liquidity-btn'),
-    removeLiquidityCard: document.getElementById('remove-liquidity-card'),
-    removeLpAmount: document.getElementById('remove-lp-amount'),
-    lpBalance: document.getElementById('lp-balance'),
-    removeReceive: document.getElementById('remove-receive'),
-    removeLiquidityBtn: document.getElementById('remove-liquidity-btn'),
-    
-    // Pool
-    poolEthReserve: document.getElementById('pool-eth-reserve'),
-    poolUsdtReserve: document.getElementById('pool-usdt-reserve'),
-    poolTotalLiquidity: document.getElementById('pool-total-liquidity'),
-    poolPrice: document.getElementById('pool-price'),
-    poolAddBtn: document.getElementById('pool-add-btn'),
-    poolRemoveBtn: document.getElementById('pool-remove-btn'),
+    // Modal
+    txModal: document.getElementById('tx-modal'),
+    modalClose: document.getElementById('modal-close'),
+    modalCancel: document.getElementById('modal-cancel'),
+    modalConfirm: document.getElementById('modal-confirm'),
+    txDetails: document.getElementById('tx-details'),
     
     // Loading
     loadingOverlay: document.getElementById('loading-overlay'),
     loadingText: document.getElementById('loading-text'),
-    notification: document.getElementById('notification')
+    notification: document.getElementById('notification'),
+    
+    // Transaction History
+    txHistoryCard: document.getElementById('tx-history-card'),
+    txList: document.getElementById('tx-list')
 };
 
 // Initialize
@@ -95,12 +96,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize App
 function initializeApp() {
-    console.log('Initializing DEX app...');
+    console.log('Initializing DEX Aggregator...');
     
     // Wait for ethers.js to load
     if (typeof ethers === 'undefined') {
-        console.error('ethers.js not loaded');
-        // Try alternative CDN or use demo mode
         setTimeout(() => {
             if (typeof ethers === 'undefined') {
                 enableDemoMode();
@@ -126,16 +125,13 @@ function initializeApp() {
         enableDemoMode();
     }
     
-    // Initialize pool with some default liquidity for demo
-    initializePool();
     updateUI();
 }
 
-// Enable Demo Mode (works without MetaMask)
+// Enable Demo Mode
 function enableDemoMode() {
     console.log('Enabling demo mode...');
     
-    // Create a demo provider for testing
     try {
         if (typeof ethers !== 'undefined') {
             provider = new ethers.providers.JsonRpcProvider('https://eth.llamarpc.com');
@@ -144,18 +140,21 @@ function enableDemoMode() {
         console.error('Error creating demo provider:', error);
     }
     
-    // Update UI for demo mode
     elements.connectWalletBtn.textContent = '连接钱包 (演示模式)';
     elements.connectWalletBtn.disabled = false;
     
-    // Setup event listeners
     setupEventListeners();
     
-    // Initialize demo user state
-    userState.balanceETH = 10; // Demo balance
-    userState.balanceUSDT = 10000; // Demo balance
+    // Demo balances
+    userState.balances = {
+        ETH: 10,
+        USDT: 10000,
+        USDC: 10000,
+        DAI: 10000,
+        WBTC: 1
+    };
     
-    showNotification('演示模式：无需MetaMask即可体验', 'warning');
+    showNotification('演示模式：价格查询可用，交易需要真实钱包', 'warning');
 }
 
 // Setup Event Listeners
@@ -165,47 +164,40 @@ function setupEventListeners() {
     // Wallet connection
     if (elements.connectWalletBtn) {
         elements.connectWalletBtn.addEventListener('click', connectWallet);
-        console.log('Connect wallet button listener added');
-    } else {
-        console.error('Connect wallet button not found');
     }
-    
-    // Tab switching
-    elements.tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
     
     // Swap
-    elements.swapFromAmount.addEventListener('input', handleSwapInput);
-    elements.swapFromToken.addEventListener('change', handleSwapInput);
-    elements.swapReverseBtn.addEventListener('click', reverseSwapTokens);
-    elements.swapBtn.addEventListener('click', executeSwap);
-    
-    // Liquidity
-    if (elements.liquidityEthAmount) {
-        elements.liquidityEthAmount.addEventListener('input', handleLiquidityInput);
+    if (elements.swapFromAmount) {
+        elements.swapFromAmount.addEventListener('input', debounce(handleSwapInput, 500));
     }
-    if (elements.liquidityUsdtAmount) {
-        elements.liquidityUsdtAmount.addEventListener('input', handleLiquidityInput);
+    if (elements.swapFromToken) {
+        elements.swapFromToken.addEventListener('change', handleSwapInput);
     }
-    if (elements.addLiquidityBtn) {
-        elements.addLiquidityBtn.addEventListener('click', addLiquidity);
+    if (elements.swapToToken) {
+        elements.swapToToken.addEventListener('change', handleSwapInput);
     }
-    if (elements.removeLpAmount) {
-        elements.removeLpAmount.addEventListener('input', handleRemoveLiquidityInput);
+    if (elements.swapReverseBtn) {
+        elements.swapReverseBtn.addEventListener('click', reverseSwapTokens);
     }
-    if (elements.removeLiquidityBtn) {
-        elements.removeLiquidityBtn.addEventListener('click', removeLiquidity);
+    if (elements.swapBtn) {
+        elements.swapBtn.addEventListener('click', showSwapConfirmation);
+    }
+    if (elements.maxFromBtn) {
+        elements.maxFromBtn.addEventListener('click', setMaxAmount);
     }
     
-    // Pool
-    elements.poolAddBtn.addEventListener('click', () => switchTab('liquidity'));
-    elements.poolRemoveBtn.addEventListener('click', () => {
-        switchTab('liquidity');
-        elements.removeLiquidityCard.style.display = 'block';
-    });
+    // Modal
+    if (elements.modalClose) {
+        elements.modalClose.addEventListener('click', hideModal);
+    }
+    if (elements.modalCancel) {
+        elements.modalCancel.addEventListener('click', hideModal);
+    }
+    if (elements.modalConfirm) {
+        elements.modalConfirm.addEventListener('click', executeSwap);
+    }
     
-    // MetaMask account change
+    // MetaMask events
     if (window.ethereum) {
         window.ethereum.on('accountsChanged', (accounts) => {
             if (accounts.length === 0) {
@@ -219,6 +211,19 @@ function setupEventListeners() {
             window.location.reload();
         });
     }
+}
+
+// Debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // Check if already connected
@@ -238,9 +243,7 @@ async function connectWallet() {
     try {
         showLoading('连接钱包中...');
         
-        // Check if MetaMask is available
         if (typeof window.ethereum !== 'undefined') {
-            // Request account access
             const accounts = await window.ethereum.request({ 
                 method: 'eth_requestAccounts' 
             });
@@ -251,23 +254,17 @@ async function connectWallet() {
             
             userState.account = accounts[0];
             
-            // Initialize provider and signer
             if (typeof ethers !== 'undefined') {
                 provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
-                
                 await updateUserBalances();
             } else {
-                // Fallback to demo mode
-                userState.account = '0x' + '0'.repeat(40); // Demo address
-                userState.balanceETH = 10;
-                userState.balanceUSDT = 10000;
+                userState.account = '0x' + '0'.repeat(40);
+                userState.balances = { ETH: 10, USDT: 10000, USDC: 10000, DAI: 10000, WBTC: 1 };
             }
         } else {
-            // Demo mode - simulate wallet connection
-            userState.account = '0x' + '0'.repeat(40); // Demo address
-            userState.balanceETH = 10;
-            userState.balanceUSDT = 10000;
+            userState.account = '0x' + '0'.repeat(40);
+            userState.balances = { ETH: 10, USDT: 10000, USDC: 10000, DAI: 10000, WBTC: 1 };
             showNotification('演示模式：使用模拟钱包', 'warning');
         }
         
@@ -281,12 +278,10 @@ async function connectWallet() {
         showNotification('连接钱包失败: ' + error.message, 'error');
         console.error('Wallet connection error:', error);
         
-        // Fallback to demo mode on error
         if (!userState.connected) {
             enableDemoMode();
             userState.account = '0x' + '0'.repeat(40);
-            userState.balanceETH = 10;
-            userState.balanceUSDT = 10000;
+            userState.balances = { ETH: 10, USDT: 10000, USDC: 10000, DAI: 10000, WBTC: 1 };
             userState.connected = true;
             updateUI();
         }
@@ -297,96 +292,82 @@ async function connectWallet() {
 function disconnectWallet() {
     userState.account = null;
     userState.connected = false;
-    userState.balanceETH = 0;
-    userState.balanceUSDT = 0;
-    userState.lpBalance = 0;
+    userState.balances = {};
     updateUI();
     showNotification('钱包已断开', 'warning');
 }
 
 // Update User Balances
 async function updateUserBalances() {
-    if (!userState.connected) return;
+    if (!userState.connected || !signer) return;
     
     try {
-        // Check if we have a real signer (MetaMask connected)
-        if (signer && typeof signer.getBalance === 'function') {
-            // Get ETH balance from real wallet
-            const ethBalance = await signer.getBalance();
-            userState.balanceETH = parseFloat(ethers.utils.formatEther(ethBalance));
-        } else {
-            // Demo mode - keep demo balances or use existing
-            if (userState.balanceETH === 0) {
-                userState.balanceETH = 10;
-            }
-        }
+        // Get ETH balance
+        const ethBalance = await signer.getBalance();
+        userState.balances.ETH = parseFloat(ethers.utils.formatEther(ethBalance));
         
-        // For demo, simulate USDT balance (实际应该从合约读取)
-        if (userState.balanceUSDT === 0) {
-            userState.balanceUSDT = 10000; // 模拟余额
-        }
-        
-        // Calculate LP balance based on user's contribution
-        if (poolState.totalSupply > 0 && userState.lpBalance === 0) {
-            // 简化计算：假设用户持有一定比例的LP代币
-            userState.lpBalance = poolState.totalSupply * 0.1; // 10% for demo
-        }
+        // Get ERC20 token balances (simplified - would need token contracts)
+        // For demo, we'll use simulated balances
+        userState.balances.USDT = 10000;
+        userState.balances.USDC = 10000;
+        userState.balances.DAI = 10000;
+        userState.balances.WBTC = 1;
     } catch (error) {
         console.error('Error updating balances:', error);
-        // Fallback to demo balances
-        if (userState.balanceETH === 0) userState.balanceETH = 10;
-        if (userState.balanceUSDT === 0) userState.balanceUSDT = 10000;
     }
 }
 
-// Initialize Pool (模拟初始流动性)
-function initializePool() {
-    // 设置初始流动性池：10 ETH + 20000 USDT (假设1 ETH = 2000 USDT)
-    poolState.reserveETH = 10;
-    poolState.reserveUSDT = 20000;
-    poolState.totalSupply = Math.sqrt(poolState.reserveETH * poolState.reserveUSDT); // Uniswap V2公式
-    poolState.k = poolState.reserveETH * poolState.reserveUSDT;
-}
-
-// Uniswap V2 AMM: Get Amount Out (恒定乘积公式)
-function getAmountOut(amountIn, reserveIn, reserveOut) {
-    if (amountIn === 0 || reserveIn === 0 || reserveOut === 0) {
-        return 0;
+// Get Quote from 1inch API
+async function getQuote(fromToken, toToken, amount) {
+    try {
+        const fromAddress = CONFIG.tokens[fromToken].address;
+        const toAddress = CONFIG.tokens[toToken].address;
+        const decimals = CONFIG.tokens[fromToken].decimals;
+        
+        // Convert amount to wei/smallest unit
+        const amountInWei = ethers.utils.parseUnits(amount.toString(), decimals).toString();
+        
+        const url = `${CONFIG.oneInchApiUrl}/quote?fromTokenAddress=${fromAddress}&toTokenAddress=${toAddress}&amount=${amountInWei}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('获取报价失败');
+        }
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error getting quote:', error);
+        throw error;
     }
-    
-    // Uniswap V2公式: amountOut = (amountIn * 997 * reserveOut) / (reserveIn * 1000 + amountIn * 997)
-    // 0.3% 手续费
-    const amountInWithFee = amountIn * 997;
-    const numerator = amountInWithFee * reserveOut;
-    const denominator = reserveIn * 1000 + amountInWithFee;
-    return numerator / denominator;
 }
 
-// Get Amount In (反向计算)
-function getAmountIn(amountOut, reserveIn, reserveOut) {
-    if (amountOut === 0 || reserveIn === 0 || reserveOut === 0) {
-        return 0;
+// Get Swap Data from 1inch API
+async function getSwapData(fromToken, toToken, amount, slippage = 1) {
+    try {
+        const fromAddress = CONFIG.tokens[fromToken].address;
+        const toAddress = CONFIG.tokens[toToken].address;
+        const decimals = CONFIG.tokens[fromToken].decimals;
+        
+        const amountInWei = ethers.utils.parseUnits(amount.toString(), decimals).toString();
+        
+        const url = `${CONFIG.oneInchApiUrl}/swap?fromTokenAddress=${fromAddress}&toTokenAddress=${toAddress}&amount=${amountInWei}&fromAddress=${userState.account}&slippage=${slippage}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('获取交易数据失败');
+        }
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error getting swap data:', error);
+        throw error;
     }
-    
-    // amountIn = (reserveIn * amountOut * 1000) / ((reserveOut - amountOut) * 997)
-    const numerator = reserveIn * amountOut * 1000;
-    const denominator = (reserveOut - amountOut) * 997;
-    return numerator / denominator;
-}
-
-// Calculate Price Impact
-function calculatePriceImpact(amountIn, reserveIn, reserveOut) {
-    if (reserveIn === 0 || reserveOut === 0) return 0;
-    
-    const spotPrice = reserveOut / reserveIn;
-    const amountOut = getAmountOut(amountIn, reserveIn, reserveOut);
-    const executionPrice = amountOut / amountIn;
-    
-    return Math.abs((executionPrice - spotPrice) / spotPrice) * 100;
 }
 
 // Handle Swap Input
-function handleSwapInput() {
+async function handleSwapInput() {
     const fromAmount = parseFloat(elements.swapFromAmount.value) || 0;
     const fromToken = elements.swapFromToken.value;
     const toToken = elements.swapToToken.value;
@@ -394,35 +375,73 @@ function handleSwapInput() {
     if (fromAmount <= 0) {
         elements.swapToAmount.value = '';
         elements.swapBtn.disabled = true;
+        resetSwapInfo();
         return;
     }
     
-    let amountOut = 0;
-    let reserveIn, reserveOut;
-    
-    if (fromToken === 'ETH') {
-        reserveIn = poolState.reserveETH;
-        reserveOut = poolState.reserveUSDT;
-    } else {
-        reserveIn = poolState.reserveUSDT;
-        reserveOut = poolState.reserveETH;
+    // Check balance
+    const balance = userState.balances[fromToken] || 0;
+    if (fromAmount > balance) {
+        elements.swapBtn.disabled = true;
+        showNotification('余额不足', 'error');
+        return;
     }
     
-    amountOut = getAmountOut(fromAmount, reserveIn, reserveOut);
-    elements.swapToAmount.value = amountOut.toFixed(6);
-    
-    // Calculate price impact
-    const impact = calculatePriceImpact(fromAmount, reserveIn, reserveOut);
-    elements.priceImpact.textContent = impact.toFixed(2) + '%';
-    elements.priceImpact.style.color = impact > 5 ? '#EF4444' : '#10B981';
-    
-    // Min received (0.5% slippage)
-    const minReceived = amountOut * 0.995;
-    elements.minReceived.textContent = minReceived.toFixed(6) + ' ' + toToken;
-    
-    // Enable/disable swap button
-    const fromBalance = fromToken === 'ETH' ? userState.balanceETH : userState.balanceUSDT;
-    elements.swapBtn.disabled = fromAmount > fromBalance || fromAmount <= 0;
+    try {
+        showLoading('获取最优报价...');
+        
+        // Get quote from 1inch
+        const quote = await getQuote(fromToken, toToken, fromAmount);
+        
+        const toDecimals = CONFIG.tokens[toToken].decimals;
+        const amountOut = parseFloat(ethers.utils.formatUnits(quote.toTokenAmount, toDecimals));
+        
+        elements.swapToAmount.value = amountOut.toFixed(6);
+        
+        // Calculate price impact
+        const priceImpact = parseFloat(quote.estimatedGas) / 1000000; // Simplified
+        swapState.priceImpact = priceImpact;
+        elements.priceImpact.textContent = priceImpact.toFixed(2) + '%';
+        elements.priceImpact.style.color = priceImpact > 5 ? '#EF4444' : '#10B981';
+        
+        // Min received (1% slippage)
+        const minReceived = amountOut * 0.99;
+        elements.minReceived.textContent = minReceived.toFixed(6) + ' ' + toToken;
+        
+        // Gas estimate (simplified)
+        const gasPrice = await provider.getGasPrice();
+        const gasCost = gasPrice.mul(quote.estimatedGas);
+        const gasCostEth = parseFloat(ethers.utils.formatEther(gasCost));
+        const ethPrice = 2000; // Simplified - would fetch from API
+        const gasCostUsd = gasCostEth * ethPrice;
+        elements.gasEstimate.textContent = `~$${gasCostUsd.toFixed(2)}`;
+        
+        // Best DEX (from 1inch protocol name)
+        elements.bestDex.textContent = quote.protocols?.[0]?.[0]?.[0]?.name || '1inch';
+        
+        swapState.quote = quote;
+        swapState.gasEstimate = gasCostEth;
+        swapState.bestDex = elements.bestDex.textContent;
+        
+        // Enable swap button
+        elements.swapBtn.disabled = !userState.connected || fromAmount <= 0;
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        console.error('Error getting quote:', error);
+        showNotification('获取报价失败: ' + error.message, 'error');
+        elements.swapBtn.disabled = true;
+    }
+}
+
+// Reset Swap Info
+function resetSwapInfo() {
+    elements.priceImpact.textContent = '0%';
+    elements.minReceived.textContent = '0';
+    elements.gasEstimate.textContent = '~$0';
+    elements.bestDex.textContent = '-';
+    swapState.quote = null;
 }
 
 // Reverse Swap Tokens
@@ -437,12 +456,80 @@ function reverseSwapTokens() {
     elements.swapFromAmount.value = toAmount;
     elements.swapToAmount.value = fromAmount;
     
-    handleSwapInput();
+    if (fromAmount) {
+        handleSwapInput();
+    }
+}
+
+// Set Max Amount
+function setMaxAmount() {
+    const fromToken = elements.swapFromToken.value;
+    const balance = userState.balances[fromToken] || 0;
+    
+    if (balance > 0) {
+        // Reserve some for gas if ETH
+        const maxAmount = fromToken === 'ETH' ? balance * 0.99 : balance;
+        elements.swapFromAmount.value = maxAmount.toFixed(6);
+        handleSwapInput();
+    }
+}
+
+// Show Swap Confirmation Modal
+function showSwapConfirmation() {
+    if (!userState.connected) {
+        showNotification('请先连接钱包', 'error');
+        return;
+    }
+    
+    const fromAmount = parseFloat(elements.swapFromAmount.value);
+    const fromToken = elements.swapFromToken.value;
+    const toAmount = parseFloat(elements.swapToAmount.value);
+    const toToken = elements.swapToToken.value;
+    
+    if (!swapState.quote) {
+        showNotification('请先获取报价', 'error');
+        return;
+    }
+    
+    // Populate modal
+    elements.txDetails.innerHTML = `
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">从</span>
+            <span class="tx-detail-value">${fromAmount} ${fromToken}</span>
+        </div>
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">到</span>
+            <span class="tx-detail-value">${toAmount.toFixed(6)} ${toToken}</span>
+        </div>
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">价格影响</span>
+            <span class="tx-detail-value">${swapState.priceImpact.toFixed(2)}%</span>
+        </div>
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">最小收到</span>
+            <span class="tx-detail-value">${(toAmount * 0.99).toFixed(6)} ${toToken}</span>
+        </div>
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">Gas费用</span>
+            <span class="tx-detail-value">~${swapState.gasEstimate.toFixed(6)} ETH</span>
+        </div>
+        <div class="tx-detail-row">
+            <span class="tx-detail-label">最优DEX</span>
+            <span class="tx-detail-value">${swapState.bestDex}</span>
+        </div>
+    `;
+    
+    elements.txModal.style.display = 'flex';
+}
+
+// Hide Modal
+function hideModal() {
+    elements.txModal.style.display = 'none';
 }
 
 // Execute Swap
 async function executeSwap() {
-    if (!userState.connected) {
+    if (!userState.connected || !signer) {
         showNotification('请先连接钱包', 'error');
         return;
     }
@@ -451,268 +538,91 @@ async function executeSwap() {
     const fromToken = elements.swapFromToken.value;
     const toToken = elements.swapToToken.value;
     
-    if (fromAmount <= 0) {
-        showNotification('请输入有效金额', 'error');
-        return;
-    }
-    
     try {
-        showLoading('执行交换中...');
+        hideModal();
+        showLoading('执行交易中...');
         
-        // 模拟交易（实际应该调用智能合约）
-        let reserveIn, reserveOut;
+        // Get swap data from 1inch
+        const swapData = await getSwapData(fromToken, toToken, fromAmount, 1);
         
-        if (fromToken === 'ETH') {
-            reserveIn = poolState.reserveETH;
-            reserveOut = poolState.reserveUSDT;
-        } else {
-            reserveIn = poolState.reserveUSDT;
-            reserveOut = poolState.reserveETH;
-        }
+        // Execute transaction
+        const tx = await signer.sendTransaction({
+            to: swapData.tx.to,
+            data: swapData.tx.data,
+            value: swapData.tx.value || '0x0',
+            gasLimit: swapData.tx.gas || 300000,
+            gasPrice: swapData.tx.gasPrice
+        });
         
-        const amountOut = getAmountOut(fromAmount, reserveIn, reserveOut);
+        showLoading('等待交易确认...');
+        elements.loadingText.textContent = `交易已提交: ${tx.hash}`;
         
-        // 更新池子状态
-        if (fromToken === 'ETH') {
-            poolState.reserveETH += fromAmount;
-            poolState.reserveUSDT -= amountOut;
-        } else {
-            poolState.reserveUSDT += fromAmount;
-            poolState.reserveETH -= amountOut;
-        }
+        // Wait for confirmation
+        const receipt = await tx.wait();
         
-        poolState.k = poolState.reserveETH * poolState.reserveUSDT;
+        // Update balances
+        await updateUserBalances();
         
-        // 更新用户余额（模拟）
-        if (fromToken === 'ETH') {
-            userState.balanceETH -= fromAmount;
-            userState.balanceUSDT += amountOut;
-        } else {
-            userState.balanceUSDT -= fromAmount;
-            userState.balanceETH += amountOut;
-        }
+        // Add to transaction history
+        addToTransactionHistory({
+            hash: tx.hash,
+            from: fromToken,
+            to: toToken,
+            fromAmount: fromAmount,
+            toAmount: parseFloat(elements.swapToAmount.value),
+            status: 'success',
+            timestamp: Date.now()
+        });
         
-        // 清空输入
+        // Clear inputs
         elements.swapFromAmount.value = '';
         elements.swapToAmount.value = '';
+        resetSwapInfo();
         
         updateUI();
         hideLoading();
-        showNotification(`成功交换 ${fromAmount} ${fromToken} → ${amountOut.toFixed(6)} ${toToken}`, 'success');
+        showNotification(`交易成功！哈希: ${tx.hash.slice(0, 10)}...`, 'success');
         
     } catch (error) {
         hideLoading();
-        showNotification('交换失败: ' + error.message, 'error');
         console.error('Swap error:', error);
-    }
-}
-
-// Handle Liquidity Input
-function handleLiquidityInput() {
-    const ethAmount = parseFloat(elements.liquidityEthAmount.value) || 0;
-    const usdtAmount = parseFloat(elements.liquidityUsdtAmount.value) || 0;
-    
-    // 如果输入ETH，自动计算USDT
-    if (ethAmount > 0 && usdtAmount === 0) {
-        const currentPrice = poolState.reserveUSDT / poolState.reserveETH;
-        const calculatedUsdt = ethAmount * currentPrice;
-        elements.liquidityUsdtAmount.value = calculatedUsdt.toFixed(2);
-    }
-    // 如果输入USDT，自动计算ETH
-    else if (usdtAmount > 0 && ethAmount === 0) {
-        const currentPrice = poolState.reserveETH / poolState.reserveUSDT;
-        const calculatedEth = usdtAmount * currentPrice;
-        elements.liquidityEthAmount.value = calculatedEth.toFixed(6);
-    }
-    
-    // 更新价格显示
-    if (ethAmount > 0 && usdtAmount > 0) {
-        const price = usdtAmount / ethAmount;
-        elements.liquidityPrice.textContent = `1 ETH = ${price.toFixed(2)} USDT`;
-    } else if (poolState.reserveETH > 0) {
-        const price = poolState.reserveUSDT / poolState.reserveETH;
-        elements.liquidityPrice.textContent = `1 ETH = ${price.toFixed(2)} USDT`;
-    }
-    
-    // 计算份额
-    if (ethAmount > 0 && poolState.reserveETH > 0) {
-        const share = (ethAmount / (poolState.reserveETH + ethAmount)) * 100;
-        elements.liquidityShare.textContent = share.toFixed(2) + '%';
-    } else {
-        elements.liquidityShare.textContent = '0%';
-    }
-    
-    // 启用/禁用按钮
-    const hasEth = ethAmount > 0 && ethAmount <= userState.balanceETH;
-    const hasUsdt = usdtAmount > 0 && usdtAmount <= userState.balanceUSDT;
-    elements.addLiquidityBtn.disabled = !(hasEth && hasUsdt && userState.connected);
-}
-
-// Add Liquidity
-async function addLiquidity() {
-    if (!userState.connected) {
-        showNotification('请先连接钱包', 'error');
-        return;
-    }
-    
-    const ethAmount = parseFloat(elements.liquidityEthAmount.value);
-    const usdtAmount = parseFloat(elements.liquidityUsdtAmount.value);
-    
-    if (ethAmount <= 0 || usdtAmount <= 0) {
-        showNotification('请输入有效金额', 'error');
-        return;
-    }
-    
-    if (ethAmount > userState.balanceETH) {
-        showNotification('ETH余额不足', 'error');
-        return;
-    }
-    
-    if (usdtAmount > userState.balanceUSDT) {
-        showNotification('USDT余额不足', 'error');
-        return;
-    }
-    
-    try {
-        showLoading('添加流动性中...');
         
-        // 计算LP代币数量 (Uniswap V2公式)
-        let lpAmount = 0;
-        
-        if (poolState.totalSupply === 0) {
-            // 首次添加流动性
-            lpAmount = Math.sqrt(ethAmount * usdtAmount);
+        if (error.code === 4001) {
+            showNotification('用户取消了交易', 'warning');
         } else {
-            // 后续添加：按比例计算
-            const ethShare = ethAmount / poolState.reserveETH;
-            const usdtShare = usdtAmount / poolState.reserveUSDT;
-            const share = Math.min(ethShare, usdtShare);
-            lpAmount = poolState.totalSupply * share;
+            showNotification('交易失败: ' + error.message, 'error');
         }
-        
-        // 更新池子状态
-        poolState.reserveETH += ethAmount;
-        poolState.reserveUSDT += usdtAmount;
-        poolState.totalSupply += lpAmount;
-        poolState.k = poolState.reserveETH * poolState.reserveUSDT;
-        
-        // 更新用户余额
-        userState.balanceETH -= ethAmount;
-        userState.balanceUSDT -= usdtAmount;
-        userState.lpBalance += lpAmount;
-        
-        // 清空输入
-        elements.liquidityEthAmount.value = '';
-        elements.liquidityUsdtAmount.value = '';
-        
-        updateUI();
-        hideLoading();
-        showNotification(`成功添加流动性，获得 ${lpAmount.toFixed(6)} LP代币`, 'success');
-        
-    } catch (error) {
-        hideLoading();
-        showNotification('添加流动性失败: ' + error.message, 'error');
-        console.error('Add liquidity error:', error);
     }
 }
 
-// Handle Remove Liquidity Input
-function handleRemoveLiquidityInput() {
-    const lpAmount = parseFloat(elements.removeLpAmount.value) || 0;
+// Add to Transaction History
+function addToTransactionHistory(tx) {
+    const txItem = document.createElement('div');
+    txItem.className = 'tx-item';
     
-    if (lpAmount <= 0 || poolState.totalSupply === 0) {
-        elements.removeReceive.textContent = '0 ETH + 0 USDT';
-        elements.removeLiquidityBtn.disabled = true;
-        return;
-    }
+    const time = new Date(tx.timestamp).toLocaleString('zh-CN');
     
-    // 计算可以取回的代币数量
-    const share = lpAmount / poolState.totalSupply;
-    const ethOut = poolState.reserveETH * share;
-    const usdtOut = poolState.reserveUSDT * share;
+    txItem.innerHTML = `
+        <div class="tx-item-info">
+            <div class="tx-item-amount">${tx.fromAmount} ${tx.from} → ${tx.toAmount.toFixed(6)} ${tx.to}</div>
+            <div class="tx-item-time">${time}</div>
+        </div>
+        <div class="tx-item-status ${tx.status}">${tx.status === 'success' ? '成功' : tx.status === 'pending' ? '处理中' : '失败'}</div>
+    `;
     
-    elements.removeReceive.textContent = `${ethOut.toFixed(6)} ETH + ${usdtOut.toFixed(2)} USDT`;
-    
-    // 启用/禁用按钮
-    elements.removeLiquidityBtn.disabled = !(lpAmount > 0 && lpAmount <= userState.lpBalance && userState.connected);
-}
-
-// Remove Liquidity
-async function removeLiquidity() {
-    if (!userState.connected) {
-        showNotification('请先连接钱包', 'error');
-        return;
-    }
-    
-    const lpAmount = parseFloat(elements.removeLpAmount.value);
-    
-    if (lpAmount <= 0) {
-        showNotification('请输入有效金额', 'error');
-        return;
-    }
-    
-    if (lpAmount > userState.lpBalance) {
-        showNotification('LP代币余额不足', 'error');
-        return;
-    }
-    
-    try {
-        showLoading('移除流动性中...');
-        
-        // 计算可以取回的代币数量
-        const share = lpAmount / poolState.totalSupply;
-        const ethOut = poolState.reserveETH * share;
-        const usdtOut = poolState.reserveUSDT * share;
-        
-        // 更新池子状态
-        poolState.reserveETH -= ethOut;
-        poolState.reserveUSDT -= usdtOut;
-        poolState.totalSupply -= lpAmount;
-        poolState.k = poolState.reserveETH * poolState.reserveUSDT;
-        
-        // 更新用户余额
-        userState.balanceETH += ethOut;
-        userState.balanceUSDT += usdtOut;
-        userState.lpBalance -= lpAmount;
-        
-        // 清空输入
-        elements.removeLpAmount.value = '';
-        
-        updateUI();
-        hideLoading();
-        showNotification(`成功移除流动性，收到 ${ethOut.toFixed(6)} ETH + ${usdtOut.toFixed(2)} USDT`, 'success');
-        
-    } catch (error) {
-        hideLoading();
-        showNotification('移除流动性失败: ' + error.message, 'error');
-        console.error('Remove liquidity error:', error);
-    }
-}
-
-// Switch Tab
-function switchTab(tabName) {
-    elements.tabBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
-    });
-    
-    elements.tabContents.forEach(content => {
-        content.classList.toggle('active', content.id === `${tabName}-tab`);
-    });
-    
-    // 重置移除流动性卡片显示
-    if (tabName !== 'liquidity') {
-        elements.removeLiquidityCard.style.display = 'none';
-    }
+    elements.txList.insertBefore(txItem, elements.txList.firstChild);
+    elements.txHistoryCard.style.display = 'block';
 }
 
 // Update UI
 function updateUI() {
     // Wallet info
-    if (userState.connected) {
+    if (userState.connected && userState.account) {
         elements.connectWalletBtn.style.display = 'none';
         elements.walletInfo.style.display = 'flex';
         elements.walletAddress.textContent = `${userState.account.slice(0, 6)}...${userState.account.slice(-4)}`;
-        elements.walletBalance.textContent = `${userState.balanceETH.toFixed(4)} ETH`;
+        const ethBalance = userState.balances.ETH || 0;
+        elements.walletBalance.textContent = `${ethBalance.toFixed(4)} ETH`;
     } else {
         elements.connectWalletBtn.style.display = 'block';
         elements.walletInfo.style.display = 'none';
@@ -721,30 +631,8 @@ function updateUI() {
     // Swap balances
     const fromToken = elements.swapFromToken.value;
     const toToken = elements.swapToToken.value;
-    elements.swapFromBalance.textContent = fromToken === 'ETH' ? userState.balanceETH.toFixed(4) : userState.balanceUSDT.toFixed(2);
-    elements.swapToBalance.textContent = toToken === 'ETH' ? userState.balanceETH.toFixed(4) : userState.balanceUSDT.toFixed(2);
-    
-    // Liquidity balances
-    elements.liquidityEthBalance.textContent = userState.balanceETH.toFixed(4);
-    elements.liquidityUsdtBalance.textContent = userState.balanceUSDT.toFixed(2);
-    elements.lpBalance.textContent = userState.lpBalance.toFixed(6);
-    
-    // Pool stats
-    elements.poolEthReserve.textContent = poolState.reserveETH.toFixed(4);
-    elements.poolUsdtReserve.textContent = poolState.reserveUSDT.toFixed(2);
-    elements.poolTotalLiquidity.textContent = poolState.totalSupply.toFixed(6);
-    
-    if (poolState.reserveETH > 0) {
-        const price = poolState.reserveUSDT / poolState.reserveETH;
-        elements.poolPrice.textContent = `${price.toFixed(2)} USDT/ETH`;
-    } else {
-        elements.poolPrice.textContent = '0 USDT/ETH';
-    }
-    
-    // Show remove liquidity card if user has LP tokens
-    if (userState.lpBalance > 0) {
-        elements.removeLiquidityCard.style.display = 'block';
-    }
+    elements.swapFromBalance.textContent = (userState.balances[fromToken] || 0).toFixed(4);
+    elements.swapToBalance.textContent = (userState.balances[toToken] || 0).toFixed(4);
 }
 
 // Show Loading
@@ -769,13 +657,13 @@ function showNotification(message, type = 'success') {
     }, 3000);
 }
 
-// Auto-update balances every 10 seconds
+// Auto-update balances
 setInterval(() => {
     if (userState.connected) {
         updateUserBalances();
         updateUI();
     }
-}, 10000);
+}, 30000); // Every 30 seconds
 
 // Initial UI update
 updateUI();
