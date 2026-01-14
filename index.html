@@ -3,9 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
+    <title>Bitchain AI - 加密世界的智能助手</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Hello World</h1>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <div class="logo">
+                    <span class="logo-text">Bitchain AI</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="nav-menu">
+                <button class="nav-btn" id="new-chat-btn">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 2V6M8 14V10M2 8H6M14 8H10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span>新聊天</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <button class="sidebar-item" id="new-chat-sidebar">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2V6M8 14V10M2 8H6M14 8H10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span>新聊天</span>
+            </button>
+            <div class="chat-history" id="chat-history">
+                <!-- 聊天历史将在这里显示 -->
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="chat-container">
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chat-messages">
+                <!-- 初始欢迎界面 -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-content">
+                        <div class="welcome-icon">💬</div>
+                        <h1 class="welcome-title">今天最想探索的区块链新鲜事是？</h1>
+                        <div class="chat-input-container">
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                class="chat-input" 
+                                placeholder="用您的加密好奇心挑战 Bitchain AI"
+                                autocomplete="off"
+                            />
+                            <button class="send-btn" id="send-btn">
+                                <span>深度研究</span>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 14L14 2M14 2H6M14 2V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area (shown when messages exist) -->
+            <div class="input-area" id="input-area" style="display: none;">
+                <div class="input-container">
+                    <input 
+                        type="text" 
+                        id="message-input" 
+                        class="message-input" 
+                        placeholder="输入您的问题..."
+                        autocomplete="off"
+                    />
+                    <button class="send-btn-small" id="send-btn-small">
+                        <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+                            <path d="M2 14L14 2M14 2H6M14 2V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="features-section">
+            <div class="features-container">
+                <!-- Agent Features -->
+                <div class="feature-group">
+                    <div class="feature-header">
+                        <div class="feature-icon">🤖</div>
+                        <h2>体验 Bitchain AI 专属的智能体网络·解密加密市场</h2>
+                    </div>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>社交媒体分析</h3>
+                            <p>实时追踪 10万+ 精选加密 KOL，解析市场情绪与关键观点。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>技术分析</h3>
+                            <p>利用 200+ 技术指标和衍生品市场数据，提供精准趋势和实时交易洞察。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>链上追踪器</h3>
+                            <p>追踪钱包行为、代币流向和链上活动，覆盖 40+ 兼容区块链网络。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>深度搜索智能体</h3>
+                            <p>每次查询扫描 200+ 网页，利用 Bitchain AI 数据库捕获实时趋势信号。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Research Features -->
+                <div class="feature-group">
+                    <div class="feature-header">
+                        <div class="feature-icon">📊</div>
+                        <h2>Bitchain AI 生成的顶级加密项目报告</h2>
+                    </div>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>专业级编排</h3>
+                            <p>采用专业布局格式，确保信息清晰易读，呈现效果出众。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>NER 智能高亮</h3>
+                            <p>使用先进的命名实体识别（NER）技术，自动标识关键信息。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>交互式图表</h3>
+                            <p>动态交互图表，点击即可实时探索数据，发现深层规律。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
 </body>
 </html>
