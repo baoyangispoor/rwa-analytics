@@ -970,30 +970,60 @@ async function connectMetaMask() {
         
         showLoading('连接MetaMask中...');
         
-        // Step 1: Check and revoke existing permissions
+        // Step 1: Clear any existing connection state
+        userState.account = null;
+        userState.connected = false;
+        userState.walletType = null;
+        provider = null;
+        signer = null;
+        
+        // Step 2: Revoke ALL existing permissions to force account selection
         try {
             const permissions = await window.ethereum.request({
                 method: 'wallet_getPermissions'
             });
             
             if (permissions && permissions.length > 0) {
+                console.log('Revoking existing permissions...');
                 for (const permission of permissions) {
                     try {
+                        // Revoke the entire permission object
                         await window.ethereum.request({
                             method: 'wallet_revokePermissions',
-                            params: [permission]
+                            params: [{ eth_accounts: permission.caveats }]
                         });
                     } catch (revokeError) {
-                        console.log('Could not revoke permission:', revokeError);
+                        // Try alternative revocation method
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_revokePermissions',
+                                params: [permission]
+                            });
+                        } catch (altError) {
+                            console.log('Could not revoke permission:', altError);
+                        }
                     }
                 }
-                await new Promise(resolve => setTimeout(resolve, 100));
+                // Wait longer to ensure revocation is processed
+                await new Promise(resolve => setTimeout(resolve, 300));
             }
         } catch (permCheckError) {
-            console.log('Permission check failed:', permCheckError);
+            console.log('Permission check failed, continuing anyway:', permCheckError);
         }
         
-        // Step 2: Request new permissions
+        // Step 3: Clear localStorage cache (if any)
+        try {
+            const keys = Object.keys(localStorage);
+            keys.forEach(key => {
+                if (key.includes('metamask') || key.includes('wallet') || key.includes('account')) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (storageError) {
+            console.log('Could not clear localStorage:', storageError);
+        }
+        
+        // Step 4: Request new permissions (this will show account selection)
         try {
             await window.ethereum.request({
                 method: 'wallet_requestPermissions',
@@ -1005,9 +1035,10 @@ async function connectMetaMask() {
                 showNotification('用户取消了连接', 'warning');
                 return;
             }
+            console.log('Permission request error, trying direct account request:', permError);
         }
         
-        // Step 3: Get accounts
+        // Step 5: Get accounts (should show selection dialog if multiple accounts)
         const accounts = await window.ethereum.request({ 
             method: 'eth_requestAccounts' 
         });
@@ -1052,6 +1083,39 @@ async function connectOKX() {
         
         showLoading('连接OKX钱包中...');
         
+        // Clear existing connection state
+        userState.account = null;
+        userState.connected = false;
+        userState.walletType = null;
+        provider = null;
+        signer = null;
+        
+        // Try to revoke permissions if OKX supports it
+        try {
+            if (window.okxwallet.request) {
+                const permissions = await window.okxwallet.request({
+                    method: 'wallet_getPermissions'
+                }).catch(() => null);
+                
+                if (permissions && permissions.length > 0) {
+                    for (const permission of permissions) {
+                        try {
+                            await window.okxwallet.request({
+                                method: 'wallet_revokePermissions',
+                                params: [permission]
+                            });
+                        } catch (e) {
+                            // OKX may not support revocation, continue anyway
+                        }
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+        } catch (e) {
+            // OKX may not support permission management, continue
+        }
+        
+        // Request accounts (should show selection if multiple)
         const accounts = await window.okxwallet.request({ 
             method: 'eth_requestAccounts' 
         });
@@ -1097,6 +1161,14 @@ async function connectBinance() {
         // Desktop extension
         showLoading('连接币安钱包中...');
         
+        // Clear existing connection state
+        userState.account = null;
+        userState.connected = false;
+        userState.walletType = null;
+        provider = null;
+        signer = null;
+        
+        // Request accounts (should show selection if multiple)
         const accounts = await window.BinanceChain.request({ 
             method: 'eth_requestAccounts' 
         });
