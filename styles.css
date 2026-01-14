@@ -13,6 +13,9 @@
     --text-secondary: #666666;
     --border-color: #e0e0e0;
     --bg-light: #f8f9fa;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 body {
@@ -152,6 +155,25 @@ button {
     display: flex;
     gap: 2rem;
     align-items: center;
+}
+
+@media (max-width: 968px) {
+    .nav-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--secondary-color);
+        flex-direction: column;
+        padding: 2rem;
+        border-top: 1px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+        display: none;
+    }
+
+    .nav-menu.active {
+        display: flex;
+    }
 }
 
 .nav-link {
@@ -632,10 +654,6 @@ button {
 
 /* Responsive Design */
 @media (max-width: 968px) {
-    .nav-menu {
-        display: none;
-    }
-
     .mobile-menu-toggle {
         display: flex;
     }
