@@ -832,7 +832,7 @@ function loadResearchData() {
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="loading-row">
+                    <td colspan="6" class="loading-row">
                         <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
                         <br>
                         <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
@@ -931,7 +931,7 @@ async function loadResearchDataFromFile() {
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="loading-row">
+                    <td colspan="6" class="loading-row">
                         <span style="color: var(--accent-red);">⚠️ 无法加载研究数据</span>
                         <br>
                         <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; display: block;">
@@ -965,46 +965,36 @@ function createResearchRow(item, index, category = 'RWA') {
     const row = document.createElement('tr');
     
     // 根据类别获取正确的字段名
-    let projectName, platform, status, assetType, assetSize, score;
+    let projectName, platform, status, assetSize;
     
     if (category === 'RWA') {
         projectName = item['项目名称'] || '';
         platform = item['发行方 / 平台'] || '';
         status = item['项目状态'] || item['当前状态'] || '';
-        assetType = item['行业'] || item['资产类型'] || '';
         assetSize = formatAssetSize(item['资产规模（USD）'] || item['金库规模（USD）'] || '');
-        score = item['币链评分（0-100）'] || '';
     } else if (category === 'DAT') {
         projectName = item['项目名称'] || '';
         platform = item['公司主体'] || item['发行方 / 平台'] || '';
         status = item['项目状态'] || '';
-        assetType = item['行业赛道'] || '';
         assetSize = formatAssetSize(item['金库规模（USD）'] || item['资产规模（USD）'] || '');
-        score = item['币链评分（0-100）'] || '';
     } else if (category === 'DAPE') {
         projectName = item['标的简称'] || item['项目名称'] || '';
         platform = item['投资方'] || item['公司主体'] || item['发行方 / 平台'] || '';
         status = item['项目状态'] || '';
-        assetType = item['一句话简介'] || '';
         assetSize = formatAssetSize(item['金额'] || item['募资金额'] || '');
-        score = '';
     } else {
         // 默认尝试所有可能的字段
         projectName = item['标的简称'] || item['项目名称'] || '';
         platform = item['公司主体'] || item['发行方 / 平台'] || item['投资方'] || '';
         status = item['项目状态'] || item['当前状态'] || '';
-        assetType = item['行业赛道'] || item['行业'] || item['资产类型'] || item['一句话简介'] || '';
         assetSize = formatAssetSize(item['金额'] || item['募资金额'] || item['资产规模（USD）'] || item['金库规模（USD）'] || '');
-        score = item['币链评分（0-100）'] || '';
     }
     
     // 转换为字符串并处理空值
     projectName = projectName.toString() || 'N/A';
     platform = platform.toString() || 'N/A';
     status = status.toString() || 'N/A';
-    assetType = assetType.toString() || 'N/A';
     assetSize = assetSize.toString() || 'N/A';
-    score = score.toString() || 'N/A';
     
     // 转义HTML防止XSS
     const escapeHtml = (text) => {
@@ -1027,9 +1017,7 @@ function createResearchRow(item, index, category = 'RWA') {
         </td>
         <td class="col-platform">${escapeHtml(platform)}</td>
         <td class="col-status">${escapeHtml(status)}</td>
-        <td class="col-asset-type">${escapeHtml(assetType)}</td>
         <td class="col-asset-size">${escapeHtml(assetSize)}</td>
-        <td class="col-score">${escapeHtml(score)}</td>
         <td class="col-actions">
             <button class="view-details-btn" data-index="${index}">详情</button>
         </td>
