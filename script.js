@@ -470,6 +470,16 @@ function updateRWAStats(filteredProjects) {
 function filterRWAProjects(category) {
     currentCategory = category;
     
+    // 确保rwaTableBody存在
+    if (!rwaTableBody) {
+        console.warn('rwaTableBody不存在，重新初始化...');
+        initDOMElements();
+        if (!rwaTableBody) {
+            console.error('无法找到rwaTableBody元素');
+            return;
+        }
+    }
+    
     // 更新筛选按钮状态
     if (filterButtons) {
         filterButtons.forEach(btn => {
@@ -481,10 +491,23 @@ function filterRWAProjects(category) {
         });
     }
 
+    // 确保rwaProjectsData已初始化
+    if (!rwaProjectsData || rwaProjectsData.length === 0) {
+        console.warn('rwaProjectsData为空，创建基本项目列表...');
+        rwaProjectsData = RWA_PROJECTS.map(project => ({
+            project: project,
+            priceData: {
+                usd: null,
+                usd_24h_change: null
+            },
+            marketData: null
+        }));
+    }
+
     // 筛选项目
     const filtered = category === 'all' 
         ? rwaProjectsData 
-        : rwaProjectsData.filter(item => item.project.category === category);
+        : rwaProjectsData.filter(item => item && item.project && item.project.category === category);
 
     // 清空表格
     rwaTableBody.innerHTML = '';
@@ -510,8 +533,12 @@ function filterRWAProjects(category) {
 
     // 创建表格行
     filtered.forEach((item, index) => {
-        const row = createTableRow(item.project, item.priceData, item.marketData, index + 1);
-        rwaTableBody.appendChild(row);
+        if (item && item.project) {
+            const row = createTableRow(item.project, item.priceData, item.marketData, index + 1);
+            if (row) {
+                rwaTableBody.appendChild(row);
+            }
+        }
     });
 
     // 更新统计信息
